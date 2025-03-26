@@ -33,7 +33,7 @@ def main(args):
     left_test = dataset_paths['left_test']
     right_test = dataset_paths['right_test']
 
-    data_transform = {
+    '''data_transform = {
         "train": transforms.Compose([transforms.RandomResizedCrop(224),
                                      transforms.RandomHorizontalFlip(),
                                      transforms.ToTensor(),
@@ -41,7 +41,21 @@ def main(args):
         "val": transforms.Compose([transforms.Resize(256),
                                    transforms.CenterCrop(224),
                                    transforms.ToTensor(),
-                                   transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])}
+                                   transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])}'''
+    data_transform = {
+        "train": transforms.Compose([
+            transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        ]),
+        "val": transforms.Compose([  # 验证集可保持原逻辑
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+        ])
+    }
 
     # 实例化训练数据集
     train_dataset = SonicomDataSet(hrtf_files=train_hrtf_list,
