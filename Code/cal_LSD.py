@@ -9,8 +9,9 @@ from TestNet import TestNet
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 
-# 全局配置
-TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）
+# 全局配置nnnnjkgit checkout mainsd
+
+TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）czsd
 BATCH_SIZE = 128
 
 model_path = "model15.pth"
@@ -28,15 +29,7 @@ class OneImageDataset(Dataset):
         self.test_people_num = test_people_num
         self.hrtf_file_names = test_hrtf_list
 
-        # self.left_image_path = left_train
-        # self.right_image_path = right_train
-        # self.test_people_num = train_people_num
-        # self.hrtf_file_names = train_hrtf_list
-
         self.transform = transform
-        # self.image_file_names = imglist
-        # self.imageNumber = len(imglist) // 2
-        # self.hrtf_file_names = hrtflist
         self.hrtfid = hrtfid
         self.target_freq_idx = target_freq_idx
 
