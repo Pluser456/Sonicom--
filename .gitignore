@@ -3,3 +3,5 @@ FFT_HRTF/
 .vscode/
 *.pth
 *.zip
+NewCode/__pycache__/
+runs/

@@ -47,13 +47,13 @@ def main(args):
             transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            transforms.Normalize([0.5], [0.5])
         ]),
         "val": transforms.Compose([  # 验证集可保持原逻辑
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+            transforms.Normalize([0.5], [0.5])
         ])
     }
 
