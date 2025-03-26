@@ -1,3 +1,4 @@
+from turtle import st
 import h5py
 import torch
 import numpy as np
@@ -8,7 +9,7 @@ from utils import calculate_hrtf_mean
 
 class SonicomDataSet(Dataset):
     """人耳图像数据集"""
-    def __init__(self, hrtf_files: list, left_images: list, right_images: list, transform=None, mode="both"):
+    def __init__(self, hrtf_files: list, left_images: list, right_images: list, transform=None, status="train", mode="both"):
         """
         Args:
             hrtf_files (list): HRTF文件路径列表
@@ -29,8 +30,9 @@ class SonicomDataSet(Dataset):
         ]) if transform is None else transform
 
         # 计算HRTF均值
-        self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
-        self.log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='right'))
+        if status == "train":
+            self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
+            self.log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='right'))
         
         # 获取方位数
         with h5py.File(self.hrtf_files[0], 'r') as f:
@@ -118,6 +120,8 @@ class SingleSubjectDataSet(SonicomDataSet):
             hrtf_files: list,
             left_images: list, 
             right_images: list,
+            train_log_mean_hrtf_left: np.ndarray,
+            train_log_mean_hrtf_right: np.ndarray,
             subject_id: int,
             transform=None,
             mode="both"
@@ -147,8 +151,11 @@ class SingleSubjectDataSet(SonicomDataSet):
             left_images=single_left,
             right_images=single_right,
             transform=transform,
+            status="test",
             mode=mode
         )
+        self.log_mean_hrtf_left = train_log_mean_hrtf_left # 直接使用训练集的均值
+        self.log_mean_hrtf_right = train_log_mean_hrtf_right # 直接使用训练集的均值
 
     def __len__(self):
         """返回单个受试者的总方位数"""
