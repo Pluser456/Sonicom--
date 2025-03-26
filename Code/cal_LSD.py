@@ -28,15 +28,7 @@ class OneImageDataset(Dataset):
         self.test_people_num = test_people_num
         self.hrtf_file_names = test_hrtf_list
 
-        # self.left_image_path = left_train
-        # self.right_image_path = right_train
-        # self.test_people_num = train_people_num
-        # self.hrtf_file_names = train_hrtf_list
-
         self.transform = transform
-        # self.image_file_names = imglist
-        # self.imageNumber = len(imglist) // 2
-        # self.hrtf_file_names = hrtflist
         self.hrtfid = hrtfid
         self.target_freq_idx = target_freq_idx
 
@@ -71,11 +63,7 @@ class OneImageDataset(Dataset):
         # self.log_mean_hrtf_right = full_log_mean_hrtf_right[:, self.target_freq_idx]  # [num_positions]
         self.log_mean_hrtf_left = full_log_mean_hrtf_left
         self.log_mean_hrtf_right = full_log_mean_hrtf_right
-
-
-
-
-
+        
     def __getitem__(self, index: int):
         # 这里不确定
         idx1 = self.hrtfid - 1  # 个体索引
