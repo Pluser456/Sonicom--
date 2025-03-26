@@ -11,7 +11,7 @@ from torchvision import transforms
 from new_dataset import SonicomDataSet
 from vit_model import vit_base_patch16_224_in21k as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
-from utils import split_dataset
+from utils import split_dataset, train_one_epoch, evaluate
 
 
 def main(args):
@@ -44,14 +44,17 @@ def main(args):
                                    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])}
 
     # 实例化训练数据集
-    train_dataset = SonicomDataSet(images_path=train_images_path,
-                              images_class=train_images_label,
-                              transform=data_transform["train"])
+    train_dataset = SonicomDataSet(hrtf_files=train_hrtf_list,
+                            left_images=left_train,
+                            right_images=right_train,
+                            transform=data_transform["train"],
+                            mode="left")
 
     # 实例化验证数据集
     val_dataset = SonicomDataSet(images_path=val_images_path,
                             images_class=val_images_label,
-                            transform=data_transform["val"])
+                            transform=data_transform["val"],
+                            mode="left")
 
     batch_size = args.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers, but isn't used here
@@ -99,7 +102,7 @@ def main(args):
 
     for epoch in range(args.epochs):
         # train
-        train_loss, train_acc = train_one_epoch(model=model,
+        train_loss = train_one_epoch(model=model,
                                                 optimizer=optimizer,
                                                 data_loader=train_loader,
                                                 device=device,
@@ -114,7 +117,7 @@ def main(args):
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
-        tb_writer.add_scalar(tags[1], train_acc, epoch)
+        # tb_writer.add_scalar(tags[1], train_acc, epoch)
         tb_writer.add_scalar(tags[2], val_loss, epoch)
         tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
