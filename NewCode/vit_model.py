@@ -230,7 +230,15 @@ class VisionTransformer(nn.Module):
 
         # Classifier head(s) 
         # fc层 特征768->分类数1000
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.head = Mlp(
+            in_features=768, 
+            hidden_features=int(768 * 0.5),  # 768/2=384
+            out_features=108,
+            act_layer=nn.GELU,  # 与默认参数保持一致
+            drop=0.1  # 按需调整dropout率
+        )
+
         self.head_dist = None
         if distilled:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
