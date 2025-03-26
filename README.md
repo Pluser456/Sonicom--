@@ -3,3 +3,4 @@
 
 - 目前 Code 中的网络是CNN，已经稳定。
 - NewCode 中网络为ViT，正在火速修改中。
+_ 学习ViT中(yjy)
