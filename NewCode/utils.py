@@ -110,7 +110,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播
-        output = model(imageleft,imageright, pos)
+        #output = model(imageleft,imageright, pos)
+        output = model(imageleft,pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach() # detach() 防止梯度传播
 
