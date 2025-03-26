@@ -5,9 +5,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
 from utils import *
-from TestNet import TestNet
+from vit_model import vit_base_patch16_224_in21k as create_model
 import matplotlib.pyplot as plt
-from sklearn import preprocessing
 
 # 全局配置
 TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）
@@ -28,7 +27,15 @@ class OneImageDataset(Dataset):
         self.test_people_num = test_people_num
         self.hrtf_file_names = test_hrtf_list
 
+        # self.left_image_path = left_train
+        # self.right_image_path = right_train
+        # self.test_people_num = train_people_num
+        # self.hrtf_file_names = train_hrtf_list
+
         self.transform = transform
+        # self.image_file_names = imglist
+        # self.imageNumber = len(imglist) // 2
+        # self.hrtf_file_names = hrtflist
         self.hrtfid = hrtfid
         self.target_freq_idx = target_freq_idx
 
@@ -111,7 +118,7 @@ class OneImageDataset(Dataset):
 
 # 2. 模型和训练配置
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-net = TestNet().to(device)  # 使用之前定义的网络结构
+net = create_model().to(device)  # 使用之前定义的网络结构
 
 # 如果需要加载预训练模型
 if os.path.exists(model_path):

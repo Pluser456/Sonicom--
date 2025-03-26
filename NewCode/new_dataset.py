@@ -17,6 +17,7 @@ class SonicomDataSet(Dataset):
             transform: 图像转换操作
             mode (str): 输出模式 - "left"/"right"/"both"
         """
+        super().__init__()
         self.hrtf_files = self._validate_hrtf_files(hrtf_files)
         self.left_images = left_images
         self.right_images = right_images
@@ -108,4 +109,84 @@ class SonicomDataSet(Dataset):
             "position": positions,
             "left_image": left_images,
             "right_image": right_images
+        }
+    
+class SingleSubjectDataSet(SonicomDataSet):
+    """单个受试者的数据集"""
+    def __init__(
+            self, 
+            hrtf_files: list,
+            left_images: list, 
+            right_images: list,
+            subject_id: int,
+            transform=None,
+            mode="both"
+    ):
+        """
+        Args:
+            hrtf_files (list): HRTF文件路径列表
+            left_images (list): 左耳图像路径列表
+            right_images (list): 右耳图像路径列表
+            subject_id (int): 目标受试者ID（从1开始）
+            transform: 图像转换操作
+            mode (str): 输出模式 - "left"/"right"/"both"
+        """
+        # 确保subject_id有效
+        if not (1 <= subject_id <= len(hrtf_files)):
+            raise ValueError(f"Invalid subject_id: {subject_id}")
+            
+        # 只保留目标受试者的数据
+        target_idx = subject_id - 1
+        single_hrtf = [hrtf_files[target_idx]]
+        single_left = [left_images[target_idx]]
+        single_right = [right_images[target_idx]]
+        
+        # 调用父类初始化
+        super().__init__(
+            hrtf_files=single_hrtf,
+            left_images=single_left,
+            right_images=single_right,
+            transform=transform,
+            mode=mode
+        )
+
+    def __len__(self):
+        """返回单个受试者的总方位数"""
+        return self.positions_per_subject
+
+    def __getitem__(self, idx):
+        """
+        获取数据项
+        Args:
+            idx (int): 方位索引
+        """
+        # 读取HRTF数据
+        with h5py.File(self.hrtf_files[0], 'r') as data:
+            # 获取HRTF
+            hrtf = self._get_hrtf(data, idx)
+            # 获取方位角
+            position = torch.tensor(data["theta"][:, idx].T).reshape(1, -1).type(torch.float32)
+
+            # 获取训练集对应的均值，注意是训练集！
+            if self.mode == "left":
+                mean_value = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
+            elif self.mode == "right":
+                mean_value = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
+            else:
+                mean_left = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
+                mean_right = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
+                mean_value = torch.cat([mean_left, mean_right], dim=0)
+
+        # 读取并处理图像
+        left_img = Image.open(self.left_images[0])
+        right_img = Image.open(self.right_images[0])
+        left_img = self.transform(left_img)
+        right_img = self.transform(right_img)
+
+        return {
+            "hrtf": hrtf,
+            "meanlog": mean_value,
+            "position": position,
+            "imageleft": left_img,
+            "imageright": right_img
         }
