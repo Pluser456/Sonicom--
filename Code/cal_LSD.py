@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn import preprocessing
 
 # 全局配置nnnn
-TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）
+TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）czsd
 BATCH_SIZE = 128
 
 model_path = "model15.pth"
