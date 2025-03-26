@@ -232,8 +232,8 @@ class VisionTransformer(nn.Module):
         # fc层 特征768->分类数1000
         #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
         self.head = Mlp(
-            in_features=768, 
-            hidden_features=int(768 * 0.5),  # 768/2=384
+            in_features=770 ,  # 原768 + 新增2维
+            hidden_features=int((770)*0.5),  # 自动计算为385
             out_features=108,
             act_layer=nn.GELU,  # 与默认参数保持一致
             drop=0.1  # 按需调整dropout率
@@ -277,8 +277,10 @@ class VisionTransformer(nn.Module):
         else:
             return x[:, 0], x[:, 1]
 
-    def forward(self, x):
+    def forward(self, x, pos_tensor):
         x = self.forward_features(x)
+        x = torch.cat([x, pos_tensor], dim=1)  # 拼接后 [B,770]
+
         #得到特征 B x 768    B=BATCH_SIZE
         #B, N, C = x.shape  其中 x.shape = (batch_size, num_patches + 1, embed_dim)
         #head_list: another classification vector
