@@ -1,6 +1,12 @@
+import imp
 import os
 import h5py
 import numpy as np
+import sys
+from tqdm import tqdm
+
+import torch
+
 
 def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> dict:
     """
@@ -88,3 +94,62 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     # 计算全局平均
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
+
+def train_one_epoch(model, optimizer, data_loader, device, epoch):
+    model.train()
+    loss_function = torch.nn.MSELoss()
+    accu_loss = torch.zeros(1).to(device)  # 累计损失
+    optimizer.zero_grad()
+ 
+    data_loader = tqdm(data_loader, file=sys.stdout)
+    for step, sample_batch in enumerate(data_loader):
+        # 数据迁移到设备
+        imageleft = sample_batch["imageleft"].to(device)
+        imageright = sample_batch["imageright"].to(device)
+        pos = sample_batch["position"].to(device)
+        target = sample_batch["diffloghrtf"].squeeze(1)[:, :].to(device)
+
+        # 前向传播
+        output = model(imageleft,imageright, pos)
+        loss = loss_function(output, target)
+        accu_loss += loss.detach() # detach() 防止梯度传播
+
+        # 反向传播
+        loss.backward()
+
+        # +++ 新增梯度裁剪（添加在此处）+++
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # 限制梯度范数为5
+        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch,loss.item() / (step + 1))
+        optimizer.step()
+        optimizer.zero_grad()
+ 
+    return accu_loss.item() / (step + 1)
+
+
+@torch.no_grad()
+def evaluate(model, data_loader, device, epoch):
+    loss_function = torch.nn.CrossEntropyLoss()
+ 
+    model.eval()
+ 
+    accu_num = torch.zeros(1).to(device)   # 累计预测正确的样本数
+    accu_loss = torch.zeros(1).to(device)  # 累计损失
+ 
+    sample_num = 0
+    data_loader = tqdm(data_loader, file=sys.stdout)
+    for step, data in enumerate(data_loader):
+        images, labels = data
+        sample_num += images.shape[0]
+ 
+        pred = model(images.to(device))
+        pred_classes = torch.max(pred, dim=1)[1]
+        accu_num += torch.eq(pred_classes, labels.to(device)).sum()
+ 
+        loss = loss_function(pred, labels.to(device))
+        accu_loss += loss
+ 
+        data_loader.desc = "[valid epoch {}] loss: {:.3f}, acc: {:.3f}".format(epoch,
+                                                                               accu_loss.item() / (step + 1),
+                                                                               accu_num.item() / sample_num)
+ 
+    return accu_loss.item() / (step + 1), accu_num.item() / sample_num
