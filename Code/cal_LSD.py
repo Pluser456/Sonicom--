@@ -28,6 +28,7 @@ class OneImageDataset(Dataset):
         self.right_image_path = right_test
         self.test_people_num = test_people_num
         self.hrtf_file_names = test_hrtf_list
+        self.mean_hrtf_file = train_hrtf_list
 
         self.transform = transform
         self.hrtfid = hrtfid
@@ -56,8 +57,11 @@ class OneImageDataset(Dataset):
                 print(f"Invalid HRTF files: {invalid_hrtf_file_names}")
 
         # HRTF均值计算
-        full_log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_file_names,whichear='left')) # 用左耳HRTF计算均值
-        full_log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_file_names,whichear='right'))
+        full_log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.mean_hrtf_file,whichear='left')) # 用左耳HRTF计算均值
+        full_log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.mean_hrtf_file,whichear='right'))
+
+        # full_log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_file_names,whichear='left')) # 用左耳HRTF计算均值
+        # full_log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_file_names,whichear='right'))
 
         self.positionNumber = h5py.File(self.hrtf_file_names[0])["F_left"].shape[0]  # 方位数
         # self.log_mean_hrtf_left = full_log_mean_hrtf_left[:, self.target_freq_idx]  # [num_positions]
