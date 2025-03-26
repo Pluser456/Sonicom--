@@ -8,7 +8,7 @@ from torchvision import transforms
 
 
 # from my_dataset import MyDataSet
-from new_dataset import SonicomDataSet
+from new_dataset import SonicomDataSet, SingleSubjectDataSet
 from vit_model import vit_base_patch16_224_in21k as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
@@ -51,10 +51,16 @@ def main(args):
                             mode="left")
 
     # 实例化验证数据集
-    val_dataset = SonicomDataSet(images_path=val_images_path,
-                            images_class=val_images_label,
-                            transform=data_transform["val"],
-                            mode="left")
+    log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
+    log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
+    val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
+                          left_images=left_test,
+                          right_images=right_test,
+                          train_log_mean_hrtf_left=log_mean_hrtf_left,
+                          train_log_mean_hrtf_right=log_mean_hrtf_right,
+                          subject_id=1,
+                          transform=data_transform["val"],
+                          mode="left")
 
     batch_size = args.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers, but isn't used here
