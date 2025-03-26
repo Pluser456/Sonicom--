@@ -104,10 +104,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
     data_loader = tqdm(data_loader, file=sys.stdout)
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
-        imageleft = sample_batch["imageleft"].to(device)
-        imageright = sample_batch["imageright"].to(device)
+        imageleft = sample_batch["left_image"].to(device)
+        imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].to(device)
-        target = sample_batch["diffloghrtf"].squeeze(1)[:, :].to(device)
+        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播
         output = model(imageleft,imageright, pos)
