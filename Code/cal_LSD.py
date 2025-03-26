@@ -9,7 +9,7 @@ from TestNet import TestNet
 import matplotlib.pyplot as plt
 from sklearn import preprocessing
 
-# 全局配置
+# 全局配置nnnn
 TARGET_FREQ_IDX = 1 # 要评估的频率点索引（0-38）
 BATCH_SIZE = 128
 
