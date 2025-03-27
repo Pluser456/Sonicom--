@@ -106,7 +106,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
         imageright = sample_batch["right_image"].to(device)
-        pos = sample_batch["position"].to(device)
+        pos = sample_batch["position"].squeeze().to(device)
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播

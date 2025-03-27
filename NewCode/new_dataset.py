@@ -56,6 +56,9 @@ class SonicomDataSet(Dataset):
         # 读取并处理图像
         left_img = Image.open(self.left_images[file_idx])
         right_img = Image.open(self.right_images[file_idx])
+        #强制转换为RGB三通道
+        left_img = Image.open(self.left_images[file_idx]).convert('RGB')
+        right_img = Image.open(self.right_images[file_idx]).convert('RGB')
         left_img = self.transform(left_img)
         right_img = self.transform(right_img)
 
