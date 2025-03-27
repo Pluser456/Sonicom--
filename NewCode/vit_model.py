@@ -254,9 +254,7 @@ class VisionTransformer(nn.Module):
     #主体部分
     def forward_features(self, x):
         # [B, C, H, W] -> [B, num_patches, embed_dim]
-        x = self.patch_embed(x)  # [B, 196, 768]
-        # [1, 1, 768] -> [B, 1, 768]
-
+        x = self.patch_embed(x)  
         #classfication_vector
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)
         if self.dist_token is None:
@@ -278,6 +276,7 @@ class VisionTransformer(nn.Module):
             return x[:, 0], x[:, 1]
 
     def forward(self, x, pos_tensor):
+        #print(x.shape) 这里输入[8,1,224,224]是正常的
         x = self.forward_features(x)
         x = torch.cat([x, pos_tensor], dim=1)  # 拼接后 [B,770]
 
