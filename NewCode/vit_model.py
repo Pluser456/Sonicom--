@@ -232,17 +232,26 @@ class VisionTransformer(nn.Module):
         # fc层 特征768->分类数1000
         #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
         self.head = Mlp(
-            in_features=768, 
-            hidden_features=int(768 * 0.5),  # 768/2=384
+            in_features=768 ,  # 原768 + 新增2维(cat需要加，crossattention不需要加)
+            hidden_features=int((768)*0.5),  # 自动计算为385
             out_features=108,
             act_layer=nn.GELU,  # 与默认参数保持一致
             drop=0.1  # 按需调整dropout率
         )
+        # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
+        self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768
 
         self.head_dist = None
         if distilled:
             self.head_dist = nn.Linear(self.embed_dim, self.num_classes) if num_classes > 0 else nn.Identity()
 
+        # 交叉注意力层（独立处理 Query 和 Key/Value）
+        self.cross_attn = nn.MultiheadAttention(
+            embed_dim=768,     # 与图像特征维度一致
+            num_heads=12,      # 与 Transformer 块中的头数一致
+            batch_first=True   # 输入形状为 [B, N, C]
+        )
+        
         # Weight init
         nn.init.trunc_normal_(self.pos_embed, std=0.02)
         if self.dist_token is not None:
@@ -254,9 +263,7 @@ class VisionTransformer(nn.Module):
     #主体部分
     def forward_features(self, x):
         # [B, C, H, W] -> [B, num_patches, embed_dim]
-        x = self.patch_embed(x)  # [B, 196, 768]
-        # [1, 1, 768] -> [B, 1, 768]
-
+        x = self.patch_embed(x)  
         #classfication_vector
         cls_token = self.cls_token.expand(x.shape[0], -1, -1)
         if self.dist_token is None:
@@ -277,8 +284,25 @@ class VisionTransformer(nn.Module):
         else:
             return x[:, 0], x[:, 1]
 
-    def forward(self, x):
+    def forward(self, x, pos_tensor):
+        #print(x.shape) 这里输入[8,1,224,224]是正常的     
         x = self.forward_features(x)
+        #print(x.shape) [8,768]
+        #print(pos_tensor.shape) [8,2] 
+        
+        # 处理位置信息
+        pos_embed = self.pos_proj(pos_tensor)  # [B, 768]
+        pos_embed = pos_embed.unsqueeze(1)     # [B, 1, 768]
+        
+        # 交叉注意力（x 作为 Query，pos_embed 作为 Key/Value）
+        x = x.unsqueeze(1)                     # [B, 1, 768]（Query）
+        attn_output, _ = self.cross_attn(
+            query=x,                           # 图像特征作为 Query
+            key=pos_embed,                     # 位置信息作为 Key
+            value=pos_embed                    # 位置信息作为 Value
+        )
+        x = attn_output.squeeze(1)             # [B, 768]    
+
         #得到特征 B x 768    B=BATCH_SIZE
         #B, N, C = x.shape  其中 x.shape = (batch_size, num_patches + 1, embed_dim)
         #head_list: another classification vector
