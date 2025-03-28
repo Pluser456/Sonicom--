@@ -9,13 +9,16 @@ from utils import calculate_hrtf_mean
 
 class SonicomDataSet(Dataset):
     """人耳图像数据集"""
-    def __init__(self, hrtf_files: list, left_images: list, right_images: list, transform=None, status="train", mode="both"):
+    def __init__(self, hrtf_files: list, left_images: list, right_images: list, 
+                 transform=None, calc_mean=True, mode="both", provided_mean_left=None, 
+                 provided_mean_right=None):
         """
         Args:
             hrtf_files (list): HRTF文件路径列表
             left_images (list): 左耳图像路径列表
             right_images (list): 右耳图像路径列表
             transform: 图像转换操作
+            calc_mean (bool): 是否计算HRTF均值
             mode (str): 输出模式 - "left"/"right"/"both"
         """
         super().__init__()
@@ -30,9 +33,12 @@ class SonicomDataSet(Dataset):
         ]) if transform is None else transform
 
         # 计算HRTF均值
-        if status == "train":
+        if calc_mean:
             self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
             self.log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='right'))
+        else:
+            self.log_mean_hrtf_left = provided_mean_left
+            self.log_mean_hrtf_right = provided_mean_right
         
         # 获取方位数
         with h5py.File(self.hrtf_files[0], 'r') as f:
@@ -154,11 +160,13 @@ class SingleSubjectDataSet(SonicomDataSet):
             left_images=single_left,
             right_images=single_right,
             transform=transform,
-            status="test",
-            mode=mode
+            calc_mean=False,
+            mode=mode,
+            provided_mean_left=train_log_mean_hrtf_left,
+            provided_mean_right=train_log_mean_hrtf_right
         )
-        self.log_mean_hrtf_left = train_log_mean_hrtf_left # 直接使用训练集的均值
-        self.log_mean_hrtf_right = train_log_mean_hrtf_right # 直接使用训练集的均值
+        # self.log_mean_hrtf_left = train_log_mean_hrtf_left # 直接使用训练集的均值
+        # self.log_mean_hrtf_right = train_log_mean_hrtf_right # 直接使用训练集的均值
 
     def __len__(self):
         """返回单个受试者的总方位数"""

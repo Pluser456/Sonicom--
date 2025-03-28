@@ -67,14 +67,15 @@ def main(args):
     # 实例化验证数据集
     log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
     log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
-    val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
-                          left_images=left_test,
-                          right_images=right_test,
-                          train_log_mean_hrtf_left=log_mean_hrtf_left,
-                          train_log_mean_hrtf_right=log_mean_hrtf_right,
-                          subject_id=1,
-                          transform=data_transform["val"],
-                          mode="left")
+    val_dataset = SonicomDataSet(hrtf_files=test_hrtf_list,
+                            left_images=left_test,
+                            right_images=right_test,
+                            transform=data_transform["val"],
+                            mode="left",
+                            calc_mean=False,
+                            provided_mean_left=log_mean_hrtf_left,
+                            provided_mean_right=log_mean_hrtf_right
+                            )
 
     batch_size = args.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 8])  # number of workers, but isn't used here
@@ -83,14 +84,14 @@ def main(args):
                                                batch_size=batch_size,
                                                shuffle=True,
                                                pin_memory=True,
-                                               num_workers=0,
+                                               num_workers=nw,
                                                collate_fn=train_dataset.collate_fn)
 
     val_loader = torch.utils.data.DataLoader(val_dataset,
-                                             batch_size=batch_size,
+                                             batch_size=batch_size*6,
                                              shuffle=False,
                                              pin_memory=True,
-                                             num_workers=0,
+                                             num_workers=nw,
                                              collate_fn=val_dataset.collate_fn)
 
     model = create_model(num_classes=args.num_classes, has_logits=False).to(device)
@@ -130,7 +131,7 @@ def main(args):
 
 
         # validate
-        val_loss, val_acc = evaluate(model=model,
+        val_loss = evaluate(model=model,
                                      data_loader=val_loader,
                                      device=device,
                                      epoch=epoch)
@@ -139,7 +140,7 @@ def main(args):
         tb_writer.add_scalar(tags[0], train_loss, epoch)
         # tb_writer.add_scalar(tags[1], train_acc, epoch)
         tb_writer.add_scalar(tags[2], val_loss, epoch)
-        tb_writer.add_scalar(tags[3], val_acc, epoch)
+        # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
 
         torch.save(model.state_dict(), "./weights/model-{}.pth".format(epoch))
