@@ -5,3 +5,4 @@ FFT_HRTF/
 *.zip
 NewCode/__pycache__/
 runs/
+*.code-workspace
