@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
     # 2. 模型和训练配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = create_model(has_logits=False).to(device)  # 使用之前定义的网络结构
+    model = create_model(num_classes=args.num_classes, has_logits=False).to(device)  # 使用之前定义的网络结构
     if args.weights != "":
         assert os.path.exists(args.weights), "weights file: '{}' not exist.".format(args.weights)
         weights_dict = torch.load(args.weights, map_location=device)
@@ -158,7 +158,6 @@ if __name__ == '__main__':
                                            right_images=right_test,
                                            transform=data_transform["val"],
                                            mode="left",
-                                           calc_mean=False,
                                            train_log_mean_hrtf_left=log_mean_hrtf_left,
                                            train_log_mean_hrtf_right=log_mean_hrtf_right,
                                            subject_id = hrtfid
