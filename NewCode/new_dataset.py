@@ -133,7 +133,7 @@ class SingleSubjectDataSet(SonicomDataSet):
             train_log_mean_hrtf_right: np.ndarray,
             subject_id: int,
             transform=None,
-            mode="both"
+            mode="both",
     ):
         """
         Args:
