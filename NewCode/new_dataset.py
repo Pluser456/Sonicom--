@@ -59,9 +59,6 @@ class SonicomDataSet(Dataset):
             # 获取方位角
             position = torch.tensor(data["theta"][:, position_idx].T).reshape(1, -1).type(torch.float32)
 
-        # 读取并处理图像
-        left_img = Image.open(self.left_images[file_idx])
-        right_img = Image.open(self.right_images[file_idx])
         #强制转换为RGB三通道
         left_img = Image.open(self.left_images[file_idx]).convert('RGB')
         right_img = Image.open(self.right_images[file_idx]).convert('RGB')
@@ -180,24 +177,28 @@ class SingleSubjectDataSet(SonicomDataSet):
         """
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[0], 'r') as data:
-            # 获取HRTF
-            hrtf = self._get_hrtf(data, idx)
             # 获取方位角
             position = torch.tensor(data["theta"][:, idx].T).reshape(1, -1).type(torch.float32)
 
             # 获取训练集对应的均值，注意是训练集！
+            # 同时获取原始HRTF
             if self.mode == "left":
                 mean_value = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
             elif self.mode == "right":
                 mean_value = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
             else:
                 mean_left = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
                 mean_right = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
                 mean_value = torch.cat([mean_left, mean_right], dim=0)
+                hrtf_left = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf_right = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
 
         # 读取并处理图像
-        left_img = Image.open(self.left_images[0])
-        right_img = Image.open(self.right_images[0])
+        left_img = Image.open(self.left_images[0]).convert('RGB')
+        right_img = Image.open(self.right_images[0]).convert('RGB')
         left_img = self.transform(left_img)
         right_img = self.transform(right_img)
 
@@ -205,6 +206,23 @@ class SingleSubjectDataSet(SonicomDataSet):
             "hrtf": hrtf,
             "meanlog": mean_value,
             "position": position,
-            "imageleft": left_img,
-            "imageright": right_img
+            "left_image": left_img,
+            "right_image": right_img
+        }
+    
+    @staticmethod
+    def collate_fn(batch):
+        """自定义批处理函数"""
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        positions = torch.stack([item["position"] for item in batch])
+        left_images = torch.stack([item["left_image"] for item in batch])
+        right_images = torch.stack([item["right_image"] for item in batch])
+        meanlog = torch.stack([item["meanlog"] for item in batch])
+        
+        return {
+            "hrtf": hrtfs,
+            "position": positions,
+            "left_image": left_images,
+            "right_image": right_images,
+            "meanlog": meanlog
         }
