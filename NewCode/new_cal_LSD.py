@@ -16,9 +16,9 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "D:\大学\大三下\大创项目\新数据库\Sonicom--\weights\model-0.pth"
+model_path = "model-1.pth"
 
-def evaluate_one_hrtf(args, model, test_loader):
+def evaluate_one_hrtf(model, test_loader):
     model.eval()
 
     all_preds = []
@@ -28,16 +28,15 @@ def evaluate_one_hrtf(args, model, test_loader):
     with torch.no_grad():
         for batch in test_loader:
             # 数据迁移到设备
-            imageleft = batch["imageleft"].to(device)
-            imageright = batch["imageright"].to(device)
-            position = batch["position"].to(device)
-            hrtf = batch["hrtf"].to(device)  # [batch]
+            imageleft = batch["left_image"].to(device) #[batch, 3, 224, 224]
+            # imageright = batch["imageright"].to(device)
+            position = batch["position"].squeeze(1).to(device) #[batch, 2]
+            targets = batch["hrtf"].squeeze(1).to(device)  # [batch]
             meanloghrtf = batch["meanlog"].to(device)  # [batch]
 
             # 前向传播
             # outputs = model(imageleft,imageright, position)  # [batch]
             outputs = model(imageleft, position)  # [batch]
-            targets = hrtf.squeeze(1)
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
@@ -86,23 +85,6 @@ if __name__ == '__main__':
     # 2. 模型和训练配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = create_model(has_logits=False).to(device)  # 使用之前定义的网络结构
-    if args.weights != "":
-        assert os.path.exists(args.weights), "weights file: '{}' not exist.".format(args.weights)
-        weights_dict = torch.load(args.weights, map_location=device)
-        print("weight_dict.state_dict().keys():{}".format(weights_dict.keys()))
-        # 删除不需要的权重
-        del_keys = ['head.weight', 'head.bias'] if model.has_logits \
-            else ['head.weight', 'head.bias'] # 'pre_logits.fc.weight', 'pre_logits.fc.bias',
-        for k in del_keys:
-            del weights_dict[k]
-        print(model.load_state_dict(weights_dict, strict=False))
-    if args.freeze_layers:
-        for name, para in model.named_parameters():
-            # 除head, pre_logits外，其他权重全部冻结
-            if "head" not in name and "pre_logits" not in name:
-                para.requires_grad_(False)
-            else:
-                print("training {}".format(name))
 
     # 如果需要加载预训练模型
     if os.path.exists(model_path):
@@ -150,7 +132,7 @@ if __name__ == '__main__':
     log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
     batch_size = args.batch_size
-
+    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4]) # 加载数据所用进程数，若大于1需要时间准备进程，不是越大越好
 
     for hrtfid in range(1, 13):  # 选择计算第几个HRTF的LSD
         val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
@@ -158,19 +140,18 @@ if __name__ == '__main__':
                                            right_images=right_test,
                                            transform=data_transform["val"],
                                            mode="left",
-                                           calc_mean=False,
                                            train_log_mean_hrtf_left=log_mean_hrtf_left,
                                            train_log_mean_hrtf_right=log_mean_hrtf_right,
                                            subject_id = hrtfid
                                            )
         dataloader = torch.utils.data.DataLoader(val_dataset,
-                                             batch_size=batch_size*6,
+                                             batch_size=batch_size,
                                              shuffle=False,
-                                             # pin_memory=True,
-                                             # num_workers= nw,
-                                             # collate_fn=val_dataset.collate_fn
+                                             pin_memory=True,
+                                             num_workers= nw,
+                                             collate_fn=val_dataset.collate_fn
                                                  )
-        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(args, model, dataloader)
+        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, dataloader)
         pred_list.append(pred_log_hrtf)
         true_list.append(true_log_hrtf)
         lsd = torch.sqrt(torch.mean((pred_log_hrtf - true_log_hrtf) ** 2)).item()
