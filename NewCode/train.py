@@ -154,8 +154,6 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--lrf', type=float, default=0.01)
 
-    # 数据集所在根目录 C:\Users\10486\Desktop\ViT\flower_data\flower_photos
-    # https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz
 
     parser.add_argument('--model-name', default='', help='create model name')
 
