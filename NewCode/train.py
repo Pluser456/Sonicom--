@@ -109,13 +109,27 @@ def main(args):
         print(model.load_state_dict(weights_dict, strict=False))
 
     if args.freeze_layers:
+        print("Freezing layers except last two blocks, head, pre_logits, and cross_attn...")
+        # 获取最后两层的名称前缀
+        last_two_blocks = [f"blocks.{i}" for i in [-2, -1]]  # 自动适配不同深度
+        
         for name, para in model.named_parameters():
-            # 除head, pre_logits外，其他权重全部冻结
-            if "head" not in name and "pre_logits" not in name:
-                para.requires_grad_(False)
+            # 解冻条件：属于最后两层、head、pre_logits 或 cross_attn
+            if (
+                "norm.weight" in name 
+                or "norm.bias" in name 
+                #or "blocks.11" in name 
+                or "head" in name 
+                or "pre_logits" in name 
+                or "pos_proj" in name 
+                or "cross_attn" in name  # 新增：解冻交叉注意力层
+            ):
+                para.requires_grad_(True)
+                print(f"Training: {name}")
             else:
-                print("training {}".format(name))
-
+                para.requires_grad_(False)
+    for name, param in model.named_parameters():#print判断冻结情况
+        print(f"Layer: {name:30} | Requires Grad: {param.requires_grad}")
     pg = [p for p in model.parameters() if p.requires_grad]
     optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.05)  # 0.05
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf (改成adamw)
