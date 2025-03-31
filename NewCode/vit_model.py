@@ -231,13 +231,18 @@ class VisionTransformer(nn.Module):
         # Classifier head(s) 
         # fc层 特征768->分类数1000
         #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
-        self.head = Mlp(
+        '''self.head = Mlp(
             in_features=768 ,  # 原768 + 新增2维(cat需要加，crossattention不需要加)
             hidden_features=int((768)*0.5),  # 自动计算为385
             out_features=108,
             act_layer=nn.GELU,  # 与默认参数保持一致
             drop=0.1  # 按需调整dropout率
+        )'''
+        self.head = nn.Sequential(
+            nn.Linear(768, 108),
+            nn.Dropout(0.1)  # 可选：保留少量正则化
         )
+
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
         self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768
 
