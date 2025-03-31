@@ -115,10 +115,12 @@ def main(args):
         
         for name, para in model.named_parameters():
             # 解冻条件：属于最后两层、head、pre_logits 或 cross_attn
+            #在这里解冻!!!解冻名字参考下面代码!!!
             if (
                 "norm.weight" in name 
                 or "norm.bias" in name 
-                #or "blocks.11" in name 
+                or "blocks.11" in name 
+                #or "blocks.10" in name 
                 or "head" in name 
                 or "pre_logits" in name 
                 or "pos_proj" in name 
