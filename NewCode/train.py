@@ -81,7 +81,7 @@ def main(args):
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4]) 
     print('Using {} dataloader workers every process'.format(nw))
     train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=batch_size,
+                                               batch_size=batch_size*3,
                                                shuffle=True,
                                                pin_memory=True,
                                                num_workers=nw,
