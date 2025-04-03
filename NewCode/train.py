@@ -120,7 +120,9 @@ def main(args):
                 "norm.weight" in name 
                 or "norm.bias" in name 
                 or "blocks.11" in name 
-                #or "blocks.10" in name 
+                or "blocks.10" in name 
+                or "blocks.9" in name
+                or "blocks.8" in name
                 or "head" in name 
                 or "pre_logits" in name 
                 or "pos_proj" in name 

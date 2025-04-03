@@ -120,7 +120,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
         # +++ 新增梯度裁剪（添加在此处）+++
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # 限制梯度范数为5
-        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch,loss.item() / (step + 1))
+        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch,accu_loss.item() / (step + 1))
         optimizer.step()
         optimizer.zero_grad()
  
