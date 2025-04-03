@@ -6,3 +6,4 @@ FFT_HRTF/
 NewCode/__pycache__/
 runs/
 *.code-workspace
+.idea/
