@@ -237,12 +237,14 @@ class VisionTransformer(nn.Module):
             out_features=108,
             act_layer=nn.GELU,  # 与默认参数保持一致
             drop=0.1  # 按需调整dropout率
-        )'''
+        )
         self.head = nn.Sequential(
             nn.Linear(768, 108),
             nn.Dropout(0.1)  # 可选：保留少量正则化
-        )
-
+        )'''
+        # 修改head层（每个token独立预测）
+        self.head = nn.Linear(768, 1)  # 每个token输出1个标量
+        
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
         self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768
 
@@ -283,16 +285,18 @@ class VisionTransformer(nn.Module):
         #归一化
         x = self.norm(x) # B x 197 x 768 ,增加了一个分类块
 
-        #提取（分类块）特征 B x 768
+        '''#提取（分类块）特征 B x 768
         if self.dist_token is None:
             return self.pre_logits(x[:, 0]) # fc + tanh
         else:
-            return x[:, 0], x[:, 1]
+            return x[:, 0], x[:, 1]'''
+        
+        # 修改：返回前108个token
+        return x[:, :108]  # [B, 108, 768]
 
-    def forward(self, x, pos_tensor):
-        #print(x.shape) 这里输入[8,1,224,224]是正常的     
-        x = self.forward_features(x)
-        #print(x.shape) [8,768]
+    def forward(self, x, pos_tensor):    
+        x = self.forward_features(x) # [B, 108, 768]
+        #print(x.shape) [8,108,768]
         #print(pos_tensor.shape) [8,2] 
         
         # 处理位置信息
@@ -300,18 +304,18 @@ class VisionTransformer(nn.Module):
         pos_embed = pos_embed.unsqueeze(1)     # [B, 1, 768]
         
         # 交叉注意力（x 作为 Query，pos_embed 作为 Key/Value）
-        x = x.unsqueeze(1)                     # [B, 1, 768]（Query）
+        #x [B, 108, 768]   pos_embed [B, 1, 768]
         attn_output, _ = self.cross_attn(
             query=x,                           # 图像特征作为 Query
             key=pos_embed,                     # 位置信息作为 Key
             value=pos_embed                    # 位置信息作为 Value
         )
-        x = attn_output.squeeze(1)             # [B, 768]    
+        # attn_output [B, 108,768]
 
         #得到特征 B x 768    B=BATCH_SIZE
         #B, N, C = x.shape  其中 x.shape = (batch_size, num_patches + 1, embed_dim)
         #head_list: another classification vector
-        if self.head_dist is not None:
+        '''if self.head_dist is not None:
             x, x_dist = self.head(x[0]), self.head_dist(x[1])
             if self.training and not torch.jit.is_scripting():
                 # during inference, return the average of both classifier predictions
@@ -320,7 +324,13 @@ class VisionTransformer(nn.Module):
                 return (x + x_dist) / 2
         else:
             x = self.head(x)   #fc
-        return x
+        return x'''
+        # 全连接层（每个token独立预测）
+        output = self.head(attn_output)  # attn_output[B, 108, 768] -> output[B, 108, 1]
+        output = output.squeeze(-1)       # [B, 108]
+        # output [B, 108]
+        
+        return output
 
 
 def _init_vit_weights(m):
