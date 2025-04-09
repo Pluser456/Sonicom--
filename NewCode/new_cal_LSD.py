@@ -1,22 +1,17 @@
-import h5py
 import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-from PIL import Image
 from utils import *
 from vit_model import vit_base_patch16_224_in21k as create_model
 import matplotlib.pyplot as plt
 import os
 import argparse
-import torch.optim as optim
-from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "model-1.pth"
+model_path = "model-3.pth"
 
 def evaluate_one_hrtf(model, test_loader):
     model.eval()
@@ -163,6 +158,7 @@ if __name__ == '__main__':
     true_tensor = torch.stack(true_list, dim=0)
 
     freq_list = np.linspace(0, 107, 108)  # 获取频率列表
+    freq_list = 48000 /256 * freq_list  # 计算频率值
     # 存储每个频率点的平均LSD
     avg_lsd_per_freq = np.zeros(len(freq_list))
     for freq_idx in range(len(freq_list)):
@@ -179,3 +175,8 @@ if __name__ == '__main__':
     plt.ylabel('LSD (dB)')
     plt.grid(True, which="both", ls="--")
     plt.show()
+    # 保存LSD结果
+    np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
+    # 保存频率-LSD图片
+    plt.savefig("LSD_per_frequency.png")
+
