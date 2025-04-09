@@ -1,4 +1,6 @@
+from cgi import test
 import numpy as np
+import h5py
 import torch
 from torchvision import transforms
 from utils import *
@@ -55,17 +57,14 @@ def evaluate_one_hrtf(model, test_loader):
 
 
 
-
 if __name__ == '__main__':
     # 设置参数
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_classes', type=int, default=5)
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--batch-size', type=int, default=400)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--lrf', type=float, default=0.01)
-
-
     parser.add_argument('--model-name', default='', help='create model name')
 
     # 预训练权重路径，如果不想载入就设置为空字符 jx_vit_base_patch16_224_in21k-e5005f0a.pth
@@ -129,7 +128,7 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4]) # 加载数据所用进程数，若大于1需要时间准备进程，不是越大越好
 
-    for hrtfid in range(1, 13):  # 选择计算第几个HRTF的LSD
+    for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
         val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
                                            left_images=left_test,
                                            right_images=right_test,
@@ -143,7 +142,7 @@ if __name__ == '__main__':
                                              batch_size=batch_size,
                                              shuffle=False,
                                              pin_memory=True,
-                                             num_workers= nw,
+                                             num_workers= 0,
                                              collate_fn=val_dataset.collate_fn
                                                  )
         pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, dataloader)
@@ -166,6 +165,28 @@ if __name__ == '__main__':
         LSDvec = torch.sqrt(torch.mean((pred_tensor[:, :, freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
         avg_lsd_per_freq[freq_idx] = torch.mean(LSDvec).item()
         print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq[freq_idx]}")
+    print("\n-----------------contrast with mean HRTF-----------------\n")
+    res_list_mean = []
+    # 将均值转为tensor
+    log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left), dtype=torch.float32).to(device)
+    log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0)  # 添加batch维度
+    for hrtfid in range(1, len(left_test)+1):
+        # 之前已经计算预测HRTF和真实HRTF之间LSD，
+        # 现在计算平均HRTF和真实HRTF之间LSD
+        lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid-1, :, :]) ** 2)).item()
+        res_list_mean.append(lsd_of_mean)
+        print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
+
+    print(f"Mean LSD of mean HRTF: {np.mean(res_list_mean)}")
+
+    avg_lsd_per_freq_of_mean = np.zeros(len(freq_list))
+    for freq_idx in range(len(freq_list)):
+        # 计算平均LSD
+        LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_left[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=0))
+        avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
+        print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
+
+
 
     # 绘制频率-LSD图
     plt.figure(figsize=(10, 6))
