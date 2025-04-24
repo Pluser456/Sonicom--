@@ -296,8 +296,6 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, pos_tensor):    
         x = self.forward_features(x) # [B, 108, 768]
-        #print(x.shape) [8,108,768]
-        #print(pos_tensor.shape) [8,2] 
         
         # 处理位置信息
         pos_embed = self.pos_proj(pos_tensor)  # [B, 768]

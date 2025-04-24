@@ -33,15 +33,6 @@ def main(args):
     left_test = dataset_paths['left_test']
     right_test = dataset_paths['right_test']
 
-    '''data_transform = {
-        "train": transforms.Compose([transforms.RandomResizedCrop(224),
-                                     transforms.RandomHorizontalFlip(),
-                                     transforms.ToTensor(),
-                                     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])]),
-        "val": transforms.Compose([transforms.Resize(256),
-                                   transforms.CenterCrop(224),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])}'''
     data_transform = {
         "train": transforms.Compose([
             transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
@@ -96,7 +87,7 @@ def main(args):
 
     model = create_model(num_classes=args.num_classes, has_logits=False).to(device)
 
-#num-classes =1000
+    # num-classes =1000
     if args.weights != "":
         assert os.path.exists(args.weights), "weights file: '{}' not exist.".format(args.weights)
         weights_dict = torch.load(args.weights, map_location=device)
