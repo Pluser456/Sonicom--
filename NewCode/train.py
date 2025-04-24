@@ -41,8 +41,7 @@ def main(args):
             transforms.Normalize([0.5], [0.5])
         ]),
         "val": transforms.Compose([  # 验证集可保持原逻辑
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(224),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5])
         ])
@@ -75,14 +74,14 @@ def main(args):
                                                batch_size=batch_size*3,
                                                shuffle=True,
                                                pin_memory=True,
-                                               num_workers=nw,
+                                            #    num_workers=nw,
                                                collate_fn=train_dataset.collate_fn)
 
     val_loader = torch.utils.data.DataLoader(val_dataset,
                                              batch_size=batch_size*6,
                                              shuffle=False,
                                              pin_memory=True,
-                                             num_workers=nw,
+                                            #  num_workers=nw,
                                              collate_fn=val_dataset.collate_fn)
 
     model = create_model(num_classes=args.num_classes, has_logits=False).to(device)
@@ -101,36 +100,33 @@ def main(args):
 
     if args.freeze_layers:
         print("Freezing layers except last two blocks, head, pre_logits, and cross_attn...")
-        # 获取最后两层的名称前缀
-        last_two_blocks = [f"blocks.{i}" for i in [-2, -1]]  # 自动适配不同深度
-        
-        for name, para in model.named_parameters():
+        # for name, para in model.named_parameters():
             # 解冻条件：属于最后两层、head、pre_logits 或 cross_attn
             #在这里解冻!!!解冻名字参考下面代码!!!
-            if (
-                "norm.weight" in name 
-                or "norm.bias" in name 
-                or "blocks.11" in name 
-                or "blocks.10" in name 
-                or "blocks.9" in name
-                or "blocks.8" in name
-                or "head" in name 
-                or "pre_logits" in name 
-                or "pos_proj" in name 
-                or "cross_attn" in name  # 新增：解冻交叉注意力层
-            ):
-                para.requires_grad_(True)
-                print(f"Training: {name}")
-            else:
-                para.requires_grad_(False)
+            # if (
+            #     "norm.weight" in name 
+            #     or "norm.bias" in name 
+            #     or "blocks.11" in name 
+            #     or "blocks.10" in name 
+            #     or "blocks.9" in name
+            #     or "blocks.8" in name
+            #     or "head" in name 
+            #     or "pre_logits" in name 
+            #     or "pos_proj" in name 
+            #     or "cross_attn" in name  # 新增：解冻交叉注意力层
+            # ):
+            #     para.requires_grad_(True)
+            #     print(f"Training: {name}")
+            # else:
+            #     para.requires_grad_(False)
     for name, param in model.named_parameters():#print判断冻结情况
         print(f"Layer: {name:30} | Requires Grad: {param.requires_grad}")
     pg = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.05)  # 0.05
+    optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.01)  # 0.05
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf (改成adamw)
 
 
-    for epoch in range(args.epochs):
+    for epoch in range(args.epochs*5):
         # train
         train_loss = train_one_epoch(model=model,
                                                 optimizer=optimizer,
@@ -151,8 +147,9 @@ def main(args):
         tb_writer.add_scalar(tags[2], val_loss, epoch)
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
-
-        torch.save(model.state_dict(), "./weights/model-{}.pth".format(epoch))
+        if epoch % 5 == 0:
+            # 保存模型
+            torch.save(model.state_dict(), "./weights/model-{}.pth".format(epoch))
 
 
 if __name__ == '__main__':

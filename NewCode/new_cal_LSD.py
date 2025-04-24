@@ -11,8 +11,9 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "model-3.pth"
+model_path = "weights\model-40.pth"
 batch_size = 1
+chosen_position = 0  # 选择的位置编号
 
 def evaluate_one_hrtf(model, test_loader):
     model.eval()
@@ -57,7 +58,7 @@ model = create_model(has_logits=False).to(device)  # 使用之前定义的网络
 
 # 如果需要加载预训练模型
 if os.path.exists(model_path):
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=False)
     print("Load model from", model_path)
 res_list = []
 pred_list = []
@@ -82,8 +83,7 @@ data_transform = {
         transforms.Normalize([0.5], [0.5])
     ]),
     "val": transforms.Compose([  # 验证集可保持原逻辑
-        transforms.Resize(256),
-        transforms.CenterCrop(224), # 中心裁剪到224x224，以后要改成resize操作到224x224
+        transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5])
     ])
@@ -137,12 +137,12 @@ for freq_idx in range(len(freq_list)):
     # 计算平均LSD
     LSDvec = torch.sqrt(torch.mean((pred_tensor[:, :, freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
     avg_lsd_per_freq[freq_idx] = torch.mean(LSDvec).item()
-    print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq[freq_idx]}")
+    # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq[freq_idx]}")
 print("\n-----------------contrast with mean HRTF-----------------\n")
 res_list_mean = []
 # 将均值转为tensor
-log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left), dtype=torch.float32).to(device)
-log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0)  # 添加batch维度
+log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left[chosen_position, :]), dtype=torch.float32).to(device)
+log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0).unsqueeze(0)  # 添加batch维度
 for hrtfid in range(1, len(left_test)+1):
     # 之前已经计算预测HRTF和真实HRTF之间LSD，
     # 现在计算平均HRTF和真实HRTF之间LSD
@@ -155,20 +155,35 @@ print(f"Mean LSD of mean HRTF: {np.mean(res_list_mean)}")
 avg_lsd_per_freq_of_mean = np.zeros(len(freq_list))
 for freq_idx in range(len(freq_list)):
     # 计算平均LSD
-    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_left[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=0))
+    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_left[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
     avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
-    print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
+    # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 
 
 # 绘制频率-LSD图
 plt.figure(figsize=(10, 6))
 plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
+plt.semilogx(freq_list, avg_lsd_per_freq_of_mean, 'r-o')
 plt.title('Frequency vs LSD')
 plt.xlabel('Frequency')
 plt.ylabel('LSD (dB)')
 plt.grid(True, which="both", ls="--")
+plt.legend(['LSD of predicted HRTF', 'LSD of mean HRTF'])
 # 保存频率-LSD图片
-plt.savefig("LSD_per_frequency.png")
-plt.show()
+plt.savefig("LSD_per_frequency.png")  # 保存频率-LSD图片
+
+#绘制LSD对比图
+plt.figure(figsize=(10, 6))
+plt.plot(range(1, len(res_list)+1), res_list, 'b-o', label='LSD of predicted HRTF')
+plt.plot(range(1, len(res_list_mean)+1), res_list_mean, 'r-o', label='LSD of mean HRTF')
+plt.title('LSD Comparison')
+plt.xlabel('HRTF ID')
+plt.ylabel('LSD (dB)')
+plt.legend()
+plt.grid(True, which="both", ls="--")
+# 保存LSD对比图
+plt.savefig("LSD_comparison.png")  # 保存LSD对比图
+plt.show(block=True)  # 显示图像，阻止脚本结束时关闭图像窗口
+
 # 保存LSD结果
 np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
