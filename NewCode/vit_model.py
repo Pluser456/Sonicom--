@@ -244,7 +244,7 @@ class VisionTransformer(nn.Module):
         )'''
         # 修改head层（每个token独立预测）
         # mark 改单频率将108改为1
-        self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(108)])
+        self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(1)])
         
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
         self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768

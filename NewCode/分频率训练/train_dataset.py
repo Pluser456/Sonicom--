@@ -8,7 +8,7 @@ from torchvision import transforms
 
 
 # from my_dataset import MyDataSet
-from new_dataset import SonicomDataSet, SingleSubjectDataSet
+# from new_dataset import SonicomDataSet, SingleSubjectDataSet
 from vit_model import vit_base_patch16_224_in21k as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
