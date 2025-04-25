@@ -57,7 +57,7 @@ model = create_model().to(device)  # 使用之前定义的网络结构
 
 # 如果需要加载预训练模型
 if os.path.exists(model_path):
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True), strict=False)
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
     print("Load model from", model_path)
 res_list = []
 pred_list = []
@@ -76,13 +76,13 @@ left_test = dataset_paths['left_test']
 right_test = dataset_paths['right_test']
 data_transform = {
     "train": transforms.Compose([
-        transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
-        transforms.RandomHorizontalFlip(),
+        # transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
+        # transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5])
     ]),
     "val": transforms.Compose([  # 验证集可保持原逻辑
-        transforms.Resize(224),
+        # transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5])
     ])
@@ -99,16 +99,17 @@ log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
 
 nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4]) # 加载数据所用进程数，若大于1需要时间准备进程，不是越大越好
-
-for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
-    val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
-                                        left_images=left_test,
-                                        right_images=right_test,
+calc_num = 160 # 计算HRTF的数量
+start_idx = 1 # HRTF编号从1开始
+for hrtfid in range(start_idx, calc_num + start_idx):  # 选择计算第几个HRTF的LSD
+    val_dataset = SingleSubjectDataSet(hrtf_files=train_hrtf_list,
+                                        left_images=left_train,
+                                        right_images=right_train,
                                         transform=data_transform["val"],
                                         mode="left",
                                         train_log_mean_hrtf_left=log_mean_hrtf_left,
                                         train_log_mean_hrtf_right=log_mean_hrtf_right,
-                                        subject_id = hrtfid
+                                        subject_id=hrtfid
                                         )
     dataloader = torch.utils.data.DataLoader(val_dataset,
                                             batch_size=batch_size,
@@ -142,10 +143,10 @@ res_list_mean = []
 # 将均值转为tensor
 log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left[chosen_position, :]), dtype=torch.float32).to(device)
 log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0).unsqueeze(0)  # 添加batch维度
-for hrtfid in range(1, len(left_test)+1):
+for hrtfid in range(1, calc_num + 1):
     # 之前已经计算预测HRTF和真实HRTF之间LSD，
     # 现在计算平均HRTF和真实HRTF之间LSD
-    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid-1, :, :]) ** 2)).item()
+    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid - 1, :, :]) ** 2)).item()
     res_list_mean.append(lsd_of_mean)
     print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
 
@@ -169,7 +170,7 @@ plt.ylabel('LSD (dB)')
 plt.grid(True, which="both", ls="--")
 plt.legend(['LSD of predicted HRTF', 'LSD of mean HRTF'])
 # 保存频率-LSD图片
-plt.savefig("LSD_per_frequency.png")  # 保存频率-LSD图片
+plt.savefig("LSD_per_frequency_train.png")  # 保存频率-LSD图片
 
 #绘制LSD对比图
 plt.figure(figsize=(10, 6))
@@ -181,7 +182,7 @@ plt.ylabel('LSD (dB)')
 plt.legend()
 plt.grid(True, which="both", ls="--")
 # 保存LSD对比图
-plt.savefig("LSD_comparison.png")  # 保存LSD对比图
+plt.savefig("LSD_comparison_train.png")  # 保存LSD对比图
 plt.show(block=True)  # 显示图像，阻止脚本结束时关闭图像窗口
 
 # 保存LSD结果

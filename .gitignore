@@ -8,3 +8,4 @@ runs/
 *.code-workspace
 .idea/
 *.png
+*.pyc

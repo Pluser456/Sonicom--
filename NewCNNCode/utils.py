@@ -1,4 +1,3 @@
-
 import os
 import h5py
 import numpy as np
@@ -105,22 +104,21 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
-        # imageright = sample_batch["right_image"].to(device)
+        imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播
-        #output = model(imageleft,imageright, pos)
-        output = model(imageleft,pos)
+        output = model(imageleft, imageright, pos)
         loss = loss_function(output, target)
-        accu_loss += loss.detach() # detach() 防止梯度传播
+        accu_loss += loss.detach()  # detach() 防止梯度传播
 
         # 反向传播
         loss.backward()
 
         # +++ 新增梯度裁剪（添加在此处）+++
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # 限制梯度范数为5
-        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch,accu_loss.item() / (step + 1))
+        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
         optimizer.step()
         optimizer.zero_grad()
  
@@ -137,13 +135,13 @@ def evaluate(model, data_loader, device, epoch):
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
-        # imageright = sample_batch["right_image"].to(device)
+        imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播
-        #output = model(imageleft, imageright, pos)
-        output = model(imageleft, pos)
+        output = model(imageleft, imageright, pos)
+        # output = model(imageleft, pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach()  # detach() 防止梯度传播
 

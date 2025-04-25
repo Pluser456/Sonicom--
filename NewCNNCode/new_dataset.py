@@ -1,4 +1,3 @@
-from turtle import st
 import h5py
 import torch
 import numpy as np
@@ -53,9 +52,9 @@ class SonicomDataSet(Dataset):
             # 获取方位角
             position = torch.tensor(data["theta"][:, position_idx].T).reshape(1, -1).type(torch.float32)
 
-        #强制转换为RGB三通道
-        left_img = Image.open(self.left_images[file_idx]).convert('RGB')
-        right_img = Image.open(self.right_images[file_idx]).convert('RGB')
+        #强制转换为灰度图像
+        left_img = Image.open(self.left_images[file_idx]).convert('L')
+        right_img = Image.open(self.right_images[file_idx]).convert('L')
         left_img = self.transform(left_img)
         right_img = self.transform(right_img)
 
@@ -191,8 +190,8 @@ class SingleSubjectDataSet(SonicomDataSet):
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
 
         # 读取并处理图像
-        left_img = Image.open(self.left_images[0]).convert('RGB')
-        right_img = Image.open(self.right_images[0]).convert('RGB')
+        left_img = Image.open(self.left_images[0]).convert('L')
+        right_img = Image.open(self.right_images[0]).convert('L')
         left_img = self.transform(left_img)
         right_img = self.transform(right_img)
 

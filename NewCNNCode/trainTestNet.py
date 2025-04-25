@@ -31,7 +31,7 @@ def main(args):
 
     data_transform = {
         "train": transforms.Compose([
-            transforms.RandomHorizontalFlip(),
+            # transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize([0.5], [0.5])
         ]),
@@ -80,11 +80,17 @@ def main(args):
 
     model = create_model().to(device)
 
-
+    # 从预训练模型加载权重
+    # modelpath = "CNNweights/model-5.pth"
+    # if os.path.exists(modelpath):
+    #     print("Load model from", modelpath)
+    #     model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    # else:
+    #     raise FileNotFoundError(f"Model file {modelpath} not found.")
     for name, param in model.named_parameters():#print判断冻结情况
         print(f"Layer: {name:30} | Requires Grad: {param.requires_grad}")
     pg = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.01)  # 0.05
+    optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.05)  # 0.05
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf (改成adamw)
 
 
@@ -118,7 +124,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.00001)
     parser.add_argument('--lrf', type=float, default=0.01)
 
 

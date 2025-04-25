@@ -6,7 +6,7 @@ from torch.nn import functional as F
 def linear_block(in_channels, out_channels):
     return nn.Sequential(
         nn.Linear(in_channels, out_channels),
-        nn.BatchNorm1d(out_channels),
+        # nn.BatchNorm1d(out_channels),
         nn.ReLU()
     )
 
@@ -90,10 +90,9 @@ class TestNet(nn.Module):
         img_feat = self.imgfc(img_feat)
 
         # 位置编码处理
-        pos_feat = pos.squeeze(1)  # [batch, positioncode_dim]
-        pos_feat = self.net(pos_feat)
+        pos_feat = self.net(pos)
 
-        # 特征融合
+        # 特征融合 
         combined = torch.cat([img_feat, pos_feat], dim=1)
         return self.output(combined)
 
