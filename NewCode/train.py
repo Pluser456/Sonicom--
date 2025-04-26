@@ -149,15 +149,15 @@ def main(args):
 
 
         # validate
-        val_loss = evaluate(model=model,
-                                     data_loader=val_loader,
-                                     device=device,
-                                     epoch=epoch)
+        # val_loss = evaluate(model=model,
+        #                              data_loader=val_loader,
+        #                              device=device,
+        #                              epoch=epoch)
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
         # tb_writer.add_scalar(tags[1], train_acc, epoch)
-        tb_writer.add_scalar(tags[2], val_loss, epoch)
+        # tb_writer.add_scalar(tags[2], val_loss, epoch)
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
 
