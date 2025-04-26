@@ -26,7 +26,8 @@ def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> d
     image_dir = os.path.join(parent_dir, image_dir)
     hrtf_dir = os.path.join(parent_dir, hrtf_dir)
     if test_indices is None:
-        test_indices = [7, 14, 27, 30, 31, 52, 54, 55, 70, 82, 143, 184]
+        # test_indices = [7, 14, 27, 30, 31, 52, 54, 55, 70, 82, 143, 184]
+        test_indices = [i for i in range(201) if i != 0]
         # print(sorted(np.random.choice(190, size=12, replace=False)))
     
     # 获取并排序图像列表
