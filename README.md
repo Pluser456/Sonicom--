@@ -71,3 +71,8 @@ VAE：输入层103（HRTF点数）->128 ->128->64 ->64->32-> 16个均值 + 16个
 主要重点：我们可以考虑将二维的`pos`位置向量改为三维的`pos`坐标向量。
 
 论文原话为：因为一些空间上接近的 HRTFs 在坐标表示上可能略有差异，但在角度表示上可能存在很大差异[例如，(0, 0)和(359, 0)处的 HRTFs]。这种转换已在初步实验中得到证实是有效的。
+
+另外，这篇文章提到在重建HRIR的时候，先使用最小相位重建方法应用于 HRTF 幅度以生成单声道 HRIR；然后，添加 ITD 以合成双耳 HRIR(Zhang et al., 2020)。
+相关的论文我们还需要看。重建的论文如下：https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8962233
+
+文章提到的卷积VAE提取耳朵特征论文如下：https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9090538
