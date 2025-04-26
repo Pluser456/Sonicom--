@@ -84,14 +84,14 @@ def main(args):
                                                batch_size=batch_size*3,
                                                shuffle=True,
                                                pin_memory=True,
-                                               num_workers=nw,
+                                            #    num_workers=nw,
                                                collate_fn=train_dataset.collate_fn)
 
     val_loader = torch.utils.data.DataLoader(val_dataset,
                                              batch_size=batch_size*6,
                                              shuffle=False,
                                              pin_memory=True,
-                                             num_workers=nw,
+                                            #  num_workers=nw,
                                              collate_fn=val_dataset.collate_fn)
 
     model = create_model(num_classes=args.num_classes, has_logits=False).to(device)
