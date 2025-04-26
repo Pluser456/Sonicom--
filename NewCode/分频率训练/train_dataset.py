@@ -8,13 +8,14 @@ from torchvision import transforms
 
 
 # from my_dataset import MyDataSet
-# from new_dataset import SonicomDataSet, SingleSubjectDataSet
+from single_dataset import SonicomDataSet, SingleSubjectDataSet
 from vit_model import vit_base_patch16_224_in21k as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
 
-
+target_index = 1
 def main(args):
+    global target_index
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 
     if os.path.exists("./weights") is False:
@@ -145,14 +146,16 @@ def main(args):
                                                 optimizer=optimizer,
                                                 data_loader=train_loader,
                                                 device=device,
-                                                epoch=epoch)
+                                                epoch=epoch,
+                                                target_index = target_index)
 
 
         # validate
         val_loss = evaluate(model=model,
                                      data_loader=val_loader,
                                      device=device,
-                                     epoch=epoch)
+                                     epoch=epoch,
+                                     target_index = target_index)
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
