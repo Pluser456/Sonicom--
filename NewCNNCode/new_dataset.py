@@ -7,9 +7,9 @@ from torchvision import transforms
 from utils import calculate_hrtf_mean
 
 class SonicomDataSet(Dataset):
-    """人耳图像数据集，更改输出模式为仅输出一个方向的HRTF"""
+    """人耳图像数据集"""
     def __init__(self, hrtf_files: list, left_images: list, right_images: list, 
-                 transform=None, calc_mean=True, mode="left", provided_mean_left=None, 
+                 transform=None, calc_mean=True, mode="both", provided_mean_left=None, 
                  provided_mean_right=None):
         """
         Args:
@@ -18,7 +18,7 @@ class SonicomDataSet(Dataset):
             right_images (list): 右耳图像路径列表
             transform: 图像转换操作
             calc_mean (bool): 是否计算HRTF均值
-            mode (str): 输出模式 - "left"/"right"/"both"，默认为"left"
+            mode (str): 输出模式 - "left"/"right"/"both"
         """
         super().__init__()
         self.hrtf_files = self._validate_hrtf_files(hrtf_files)
@@ -36,14 +36,18 @@ class SonicomDataSet(Dataset):
         else:
             self.log_mean_hrtf_left = provided_mean_left
             self.log_mean_hrtf_right = provided_mean_right
+        
+        # 获取方位数
+        with h5py.File(self.hrtf_files[0], 'r') as f:
+            self.positions_per_subject = f["F_left"].shape[0]
 
     def __len__(self):
-        return len(self.hrtf_files)
+        return len(self.hrtf_files) * self.positions_per_subject
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
-        file_idx = idx
-        position_idx = 0
+        file_idx = idx // self.positions_per_subject
+        position_idx = idx % self.positions_per_subject
 
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[file_idx], 'r') as data:
@@ -117,13 +121,13 @@ class SingleSubjectDataSet(SonicomDataSet):
     def __init__(
             self, 
             hrtf_files: list,
-            left_images: list,
+            left_images: list, 
             right_images: list,
             train_log_mean_hrtf_left: np.ndarray,
             train_log_mean_hrtf_right: np.ndarray,
             subject_id: int,
             transform=None,
-            mode="left",
+            mode="both",
     ):
         """
         Args:
@@ -160,7 +164,7 @@ class SingleSubjectDataSet(SonicomDataSet):
 
     def __len__(self):
         """返回单个受试者的总方位数"""
-        return 1
+        return self.positions_per_subject
 
     def __getitem__(self, idx):
         """
