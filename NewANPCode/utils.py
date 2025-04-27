@@ -106,15 +106,18 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
-        imageleft = sample_batch["left_image"].to(device)
-        imageright = sample_batch["right_image"].to(device)
+        # 修改这里使用特征而不是图像
+        img_features = sample_batch["image_feature"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        
+        img_features.sum().backward()  # 尝试反向传播
+        print(model.feature_extractor.conv1.weight.grad)
 
-        # 前向传播
-        output = model(imageleft, imageright, pos)
+        # 直接使用 prediction_net 而不是完整模型
+        output = model.prediction_net(img_features, pos)
         loss = loss_function(output, target)
-        accu_loss += loss.detach()  # detach() 防止梯度传播
+        accu_loss += loss.detach()
 
         # 反向传播
         loss.backward()
@@ -149,15 +152,15 @@ def evaluate(model, data_loader, device, epoch, rank=0):
     
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
-        imageleft = sample_batch["left_image"].to(device)
-        imageright = sample_batch["right_image"].to(device)
+        # 修改这里使用特征而不是图像
+        img_features = sample_batch["image_feature"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
-        # 前向传播
-        output = model(imageleft, imageright, pos)
+        # 直接使用 prediction_net
+        output = model.prediction_net(img_features, pos)
         loss = loss_function(output, target)
-        accu_loss += loss.detach()  # detach() 防止梯度传播
+        accu_loss += loss.detach()
 
         # 仅在主进程更新进度条描述
         if rank == 0:

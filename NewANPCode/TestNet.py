@@ -3,12 +3,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-def linear_block(in_channels, out_channels):
-    return nn.Sequential(
-        nn.Linear(in_channels, out_channels),
-        # nn.BatchNorm1d(out_channels),
-        nn.ReLU()
-    )
 
 
 class Residual(nn.Module):
@@ -46,9 +40,10 @@ def resnet_block(input_channels, num_channels, num_residuals, first_block=False)
     return blk
 
 
-class TestNet(nn.Module):
+class FeatureExtractor(nn.Module):
+    """图像特征提取网络"""
     def __init__(self):
-        super(TestNet, self).__init__()
+        super(FeatureExtractor, self).__init__()
         # ResNet风格的卷积部分
         self.conv_net = nn.Sequential(
             # 初始卷积层
@@ -59,40 +54,62 @@ class TestNet(nn.Module):
 
             # 残差块
             *resnet_block(64, 64, 2, first_block=True),
-            # *resnet_block(64, 128, 2),
-            # *resnet_block(128, 256, 2),
             *resnet_block(64, 256, 2),
 
             # 最终处理
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten()
         )
-        self.fc0 = linear_block(2, 128)
-        self.fc1 = linear_block(128, 256)
-        self.fc2 = linear_block(256, 256)
-        self.fc3 = linear_block(256, 128)
-        self.fc4 = linear_block(128, 64)
-        self.net = nn.Sequential(self.fc0, self.fc1, self.fc2, self.fc3, self.fc4)
-        # 保持原有全连接结构（输入维度自动匹配512 + positioncode_dim）
         self.imgfc = nn.Sequential(
-            linear_block(512, 256),
-            linear_block(256,256),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
         )
-        self.output = nn.Linear(256+64, 108)
 
-    def forward(self, image_left, image_right, pos):
+    def forward(self, image_left, image_right):
         # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(image_left)  # [batch, 512]
-        img_feat_right = self.conv_net(image_right)  # [batch, 512]
+        img_feat_left = self.conv_net(image_left)  # [batch, 256]
+        img_feat_right = self.conv_net(image_right)  # [batch, 256]
 
         # 拼接图像特征
-        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 1024]
-        img_feat = self.imgfc(img_feat)
+        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
+        return self.imgfc(img_feat)  # [batch, 256]
 
-        # 位置编码处理
-        pos_feat = self.net(pos)
-
-        # 特征融合 
-        combined = torch.cat([img_feat, pos_feat], dim=1)
+class PredictionNet(nn.Module):
+    """基于特征的预测网络"""
+    def __init__(self):
+        super(PredictionNet, self).__init__()
+        # 位置特征处理网络
+        self.fc0 = nn.Linear(2, 128)
+        self.fc1 = nn.Linear(128, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 128)
+        self.fc4 = nn.Linear(128, 64)
+        
+        # 输出层
+        self.output = nn.Linear(256+64, 108)
+        
+    def forward(self, img_features, pos):
+        # 处理位置信息
+        pos_feat = F.relu(self.fc0(pos))
+        pos_feat = F.relu(self.fc1(pos_feat))
+        pos_feat = F.relu(self.fc2(pos_feat))
+        pos_feat = F.relu(self.fc3(pos_feat))
+        pos_feat = F.relu(self.fc4(pos_feat))
+        
+        # 特征融合
+        combined = torch.cat([img_features, pos_feat], dim=1)
         return self.output(combined)
 
+class TestNet(nn.Module):
+    """完整网络，集成特征提取和预测"""
+    def __init__(self):
+        super(TestNet, self).__init__()
+        self.feature_extractor = FeatureExtractor()
+        self.prediction_net = PredictionNet()
+        
+    def forward(self, image_left, image_right, pos):
+        # 特征提取
+        img_features = self.feature_extractor(image_left, image_right)
+        # 预测
+        return self.prediction_net(img_features, pos)
