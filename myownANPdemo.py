@@ -46,11 +46,10 @@ class DataGenerator():
 
         return (target_x, target_y), (context_x, context_y)
     
-    def get_test_samples(self):
+    def get_test_samples(self, context_num=1000, target_num=125):
         # 生成测试样本
-        test_batch_num = self.max_samples*2
-        test_target_num = test_batch_num // 8
-        test_context_num = test_batch_num - test_target_num
+        test_target_num = target_num
+        test_context_num = context_num
 
         target_indices = np.zeros((self.batch_size, test_target_num), dtype=int)
         context_indices = np.zeros((self.batch_size, test_context_num), dtype=int)
@@ -207,13 +206,14 @@ class AttentionAggregator(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, dim_r, dim_x, dim_y, hidden_dim):
         super(Decoder, self).__init__()
-        self.mlp = batch_mlp(dim_r + dim_x, hidden_dim + [dim_y*2])
+        self.mlp = batch_mlp(dim_r + dim_x, hidden_dim + [dim_y])
 
     def forward(self, r, target_x):
         decoder_input = torch.cat([r, target_x], dim=-1)
-        decoder_output = self.mlp(decoder_input)
-        mu, log_var = decoder_output.split(decoder_output.size(-1) // 2, dim=-1)
-        return mu, log_var
+        # decoder_output = self.mlp(decoder_input)
+        # mu, log_var = decoder_output.split(decoder_output.size(-1) // 2, dim=-1)
+        mu = self.mlp(decoder_input)
+        return mu
 
 class ANP(nn.Module):
     def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes):
@@ -228,8 +228,8 @@ class ANP(nn.Module):
         # target_x: 目标输入，形状为 (batch_size, target_num, 2)
         batch_r = self.encoder(context_x, context_y) # (batch_size, context_num, 64)
         r = self.attention_aggregator(target_x, context_x, batch_r)
-        mu, log_var = self.decoder(r, target_x)
-        return mu, log_var
+        mu = self.decoder(r, target_x)
+        return mu
     
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -265,7 +265,8 @@ def plot_gaussian_surface(mean, cov, model):
     
     Z = gaussian(pos.to(device)).reshape(X.shape).cpu().detach().numpy()  # 添加 to(device) 和 cpu()
     with torch.no_grad():
-        mu, _ = model(context_x, context_y, target_x)
+        # mu, _ = model(context_x, context_y, target_x)
+        mu = model(context_x, context_y, target_x)
         pred_target_y = mu.squeeze(0).cpu().numpy()
     
     # 确保绘图时所有张量都在 CPU 上
@@ -286,7 +287,7 @@ def plot_gaussian_surface(mean, cov, model):
     plt.show()
 
 # plot_gaussian_surface(torch.tensor([0.0, 0.0]), torch.tensor([[1.0, 0.5], [0.5, 1.0]]))
-
+criterion = nn.MSELoss()
 # 训练模型
 for epoch in range(6001):
     model.train()
@@ -296,25 +297,40 @@ for epoch in range(6001):
     target_y = target_y.to(device)
     context_x = context_x.to(device)
     context_y = context_y.to(device)
-    mu, log_var = model(context_x, context_y, target_x)
-    dist = distributions.Normal(mu, torch.exp(log_var / 2))
-    loss = -dist.log_prob(target_y).mean()
+    mu = model(context_x, context_y, target_x)
+    # dist = distributions.Normal(mu, torch.exp(log_var / 2))
+    # loss = -dist.log_prob(target_y).mean()
+    loss = criterion(mu, target_y)
     loss.backward()
     optimizer.step()
     if epoch % 600 == 0:
-        print(f'Epoch {epoch}, Train Loss: {loss.item()}')
+        print(f'Epoch {epoch}, Train Loss: {loss.item():.4e}')
         with torch.no_grad():
             # 生成测试样本
-            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples()
+            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=1000, target_num=125)
             target_x = target_x.to(device)
             target_y = target_y.to(device)
             context_x = context_x.to(device)
             context_y = context_y.to(device)
-            mu, log_var = model(context_x, context_y, target_x)
-            pred_target_y = mu.squeeze(0).cpu().numpy()
-            dist = distributions.Normal(mu, torch.exp(log_var / 2))
-            loss = -dist.log_prob(target_y).mean()
-            print(f'Epoch {epoch}, Test Loss: {loss.item()}')
+            mu = model(context_x, context_y, target_x)
+            loss = criterion(mu, target_y)
+            print(f'Epoch {epoch}, Test Loss(High Context Num): {loss.item():.4e}')
+            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=100, target_num=125)
+            target_x = target_x.to(device)
+            target_y = target_y.to(device)
+            context_x = context_x.to(device)
+            context_y = context_y.to(device)
+            mu = model(context_x, context_y, target_x)
+            loss = criterion(mu, target_y)
+            print(f'Epoch {epoch}, Test Loss(Mid Context Num): {loss.item():.4e}')
+            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=10, target_num=125)
+            target_x = target_x.to(device)
+            target_y = target_y.to(device)
+            context_x = context_x.to(device)
+            context_y = context_y.to(device)
+            mu = model(context_x, context_y, target_x)
+            loss = criterion(mu, target_y)
+            print(f'Epoch {epoch}, Test Loss(Low Context Num): {loss.item():.4e}')
             # 绘制训练样本和拟合的高斯函数
         plot_gaussian_surface(torch.tensor([0.0, 0.0]), 
                               torch.tensor([[1.0, 0.5], [0.5, 1.0]]), model)
