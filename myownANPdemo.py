@@ -1,4 +1,3 @@
-from multiprocessing import context
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -288,6 +287,17 @@ def plot_gaussian_surface(mean, cov, model):
 
 # plot_gaussian_surface(torch.tensor([0.0, 0.0]), torch.tensor([[1.0, 0.5], [0.5, 1.0]]))
 criterion = nn.MSELoss()
+
+def get_loss(data_generator, model, criterion, context_num, target_num):
+    (target_x, target_y), (context_x, context_y) = data_generator.get_test_samples(context_num=context_num, target_num=target_num)
+    target_x = target_x.to(device)
+    target_y = target_y.to(device)
+    context_x = context_x.to(device)
+    context_y = context_y.to(device)
+    mu = model(context_x, context_y, target_x)
+    loss = criterion(mu, target_y)
+    return loss.item()
+
 # 训练模型
 for epoch in range(6001):
     model.train()
@@ -307,30 +317,14 @@ for epoch in range(6001):
         print(f'Epoch {epoch}, Train Loss: {loss.item():.4e}')
         with torch.no_grad():
             # 生成测试样本
-            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=1000, target_num=125)
-            target_x = target_x.to(device)
-            target_y = target_y.to(device)
-            context_x = context_x.to(device)
-            context_y = context_y.to(device)
-            mu = model(context_x, context_y, target_x)
-            loss = criterion(mu, target_y)
-            print(f'Epoch {epoch}, Test Loss(High Context Num): {loss.item():.4e}')
-            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=100, target_num=125)
-            target_x = target_x.to(device)
-            target_y = target_y.to(device)
-            context_x = context_x.to(device)
-            context_y = context_y.to(device)
-            mu = model(context_x, context_y, target_x)
-            loss = criterion(mu, target_y)
-            print(f'Epoch {epoch}, Test Loss(Mid Context Num): {loss.item():.4e}')
-            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples(context_num=10, target_num=125)
-            target_x = target_x.to(device)
-            target_y = target_y.to(device)
-            context_x = context_x.to(device)
-            context_y = context_y.to(device)
-            mu = model(context_x, context_y, target_x)
-            loss = criterion(mu, target_y)
-            print(f'Epoch {epoch}, Test Loss(Low Context Num): {loss.item():.4e}')
+            loss = get_loss(train_data_generator, model, criterion, context_num=3000, target_num=125)
+            print(f'Epoch {epoch}, Test Loss(Ultimate High Context Num): {loss:.4e}')
+            loss = get_loss(train_data_generator, model, criterion, context_num=1000, target_num=125)
+            print(f'Epoch {epoch}, Test Loss(High Context Num): {loss:.4e}')
+            loss = get_loss(train_data_generator, model, criterion, context_num=100, target_num=125)
+            print(f'Epoch {epoch}, Test Loss(Low Context Num): {loss:.4e}')
+            loss = get_loss(train_data_generator, model, criterion, context_num=10, target_num=125)
+            print(f'Epoch {epoch}, Test Loss(Low Context Num): {loss:.4e}')
             # 绘制训练样本和拟合的高斯函数
         plot_gaussian_surface(torch.tensor([0.0, 0.0]), 
                               torch.tensor([[1.0, 0.5], [0.5, 1.0]]), model)
