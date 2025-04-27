@@ -152,7 +152,7 @@ for freq_idx in range(len(freq_list)):
     avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
     # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 
-
+print(f"Model has outperformed the mean HRTF {(np.mean(res_list_mean) - np.mean(res_list)):.4f} dB")
 # 绘制频率-LSD图
 plt.figure(figsize=(10, 6))
 plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
