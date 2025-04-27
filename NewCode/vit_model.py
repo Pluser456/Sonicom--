@@ -243,8 +243,10 @@ class VisionTransformer(nn.Module):
             nn.Dropout(0.1)  # 可选：保留少量正则化
         )'''
         # 修改head层（每个token独立预测）
-        # mark 改单频率将108改为1
+        # # mark 改单频率将108改为1
         self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(1)])
+        # self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(108)])
+        
         
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
         self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768
@@ -332,6 +334,8 @@ class VisionTransformer(nn.Module):
         # output [B, 108]
         # attn_output shape: [B, 108, 768]'''
         outputs = []
+        # mark
+        # for i in range(108):
         for i in range(1):
             # 对每个位置应用对应的线性层
             out = self.heads[i](attn_output[:, i, :])  # [B, 1]

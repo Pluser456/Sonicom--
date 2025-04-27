@@ -8,7 +8,7 @@ from torchvision import transforms
 from utils import calculate_hrtf_mean
 
 class SonicomDataSet(Dataset):
-    """人耳图像数据集，更改输出模式为仅输出一个频率的HRTF"""
+    """人耳图像数据集，更改输出模式为仅输出一个方向的HRTF"""
     def __init__(self, hrtf_files: list, left_images: list, right_images: list, 
                  transform=None, calc_mean=True, mode="left", provided_mean_left=None, 
                  provided_mean_right=None):
@@ -43,8 +43,8 @@ class SonicomDataSet(Dataset):
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
-        file_idx = idx // self.positions_per_subject
-        position_idx = idx % self.positions_per_subject
+        file_idx = idx
+        position_idx = 0
 
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[file_idx], 'r') as data:

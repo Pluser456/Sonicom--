@@ -95,7 +95,7 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index = 1):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index = 50):
     model.train()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
@@ -108,7 +108,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index =
         imageleft = sample_batch["left_image"].to(device)
         # imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
+        # mark
         target = sample_batch["hrtf"].squeeze(1)[:, target_index].to(device)
+        # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        
       
         # [:, target_index].to(device)
 
@@ -117,6 +120,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index =
         output = model(imageleft,pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach() # detach() 防止梯度传播
+        
 
         # 反向传播
         loss.backward()
@@ -131,7 +135,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index =
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device, epoch, target_index = 1):
+def evaluate(model, data_loader, device, epoch, target_index = 50):
     model.eval()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
@@ -142,7 +146,10 @@ def evaluate(model, data_loader, device, epoch, target_index = 1):
         imageleft = sample_batch["left_image"].to(device)
         # imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
+        # mark
         target = sample_batch["hrtf"].squeeze(1)[:, target_index].to(device)
+        # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        
 
         # 前向传播
         #output = model(imageleft, imageright, pos)

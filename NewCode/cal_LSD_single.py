@@ -13,12 +13,12 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "weights\model-9.pth"
+model_path = "weights-100\model-1.pth"
 # model_path = "123"
 
-target_index = 100
+target_index = 50
 
-def evaluate_one_hrtf(model, test_loader, target_index = 1):
+def evaluate_one_hrtf(model, test_loader, target_index = 50):
     model.eval()
 
     all_preds = []
@@ -31,8 +31,12 @@ def evaluate_one_hrtf(model, test_loader, target_index = 1):
             imageleft = batch["left_image"].to(device) #[batch, 3, 224, 224]
             # imageright = batch["imageright"].to(device)
             position = batch["position"].squeeze(1).to(device) #[batch, 2]
+            # mark
             targets = batch["hrtf"].squeeze(1)[:, target_index].to(device)  # [batch]
             meanloghrtf = batch["meanlog"].unsqueeze(-1)[:, target_index].to(device)  # [batch]
+            
+            # targets = batch["hrtf"].squeeze(1)[:, :].to(device)  # [batch]
+            # meanloghrtf = batch["meanlog"][:, :].to(device)  # [batch]
 
             # 前向传播
             # outputs = model(imageleft,imageright, position)  # [batch]
