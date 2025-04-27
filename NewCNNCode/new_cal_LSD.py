@@ -11,9 +11,8 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "CNNweights\model-45.pth"
-batch_size = 1
-chosen_position = 0  # 选择的位置编号
+model_path = "CNNweights\model-0.pth"
+batch_size = 32
 
 def evaluate_one_hrtf(model, test_loader):
     model.eval()
@@ -75,14 +74,8 @@ right_train = dataset_paths['right_train']
 left_test = dataset_paths['left_test']
 right_test = dataset_paths['right_test']
 data_transform = {
-    "train": transforms.Compose([
-        transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5], [0.5])
-    ]),
     "val": transforms.Compose([  # 验证集可保持原逻辑
-        transforms.Resize(224),
+        # transforms.Resize(224),
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5])
     ])
@@ -108,13 +101,13 @@ for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
                                         mode="left",
                                         train_log_mean_hrtf_left=log_mean_hrtf_left,
                                         train_log_mean_hrtf_right=log_mean_hrtf_right,
-                                        subject_id = hrtfid
+                                        subject_id=hrtfid
                                         )
     dataloader = torch.utils.data.DataLoader(val_dataset,
                                             batch_size=batch_size,
                                             shuffle=False,
                                             pin_memory=True,
-                                            num_workers= 0,
+                                            num_workers=0,
                                             collate_fn=val_dataset.collate_fn
                                                 )
     pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, dataloader)
@@ -140,9 +133,10 @@ for freq_idx in range(len(freq_list)):
 print("\n-----------------contrast with mean HRTF-----------------\n")
 res_list_mean = []
 # 将均值转为tensor
-log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left[chosen_position, :]), dtype=torch.float32).to(device)
-log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0).unsqueeze(0)  # 添加batch维度
-for hrtfid in range(1, len(left_test)+1):
+log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left), dtype=torch.float32).to(device)
+log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0)  # 添加batch维度
+
+for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
     # 之前已经计算预测HRTF和真实HRTF之间LSD，
     # 现在计算平均HRTF和真实HRTF之间LSD
     lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid-1, :, :]) ** 2)).item()
