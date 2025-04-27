@@ -62,8 +62,6 @@ def main(args):
                             )
 
     batch_size = args.batch_size
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4]) 
-    print('Using {} dataloader workers every process'.format(nw))
     train_loader = torch.utils.data.DataLoader(train_dataset,
                                                batch_size=batch_size*3,
                                                shuffle=True,
@@ -94,15 +92,13 @@ def main(args):
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf (改成adamw)
 
 
-    for epoch in range(args.epochs*5):
+    for epoch in range(args.epochs*2):
         # train
         train_loss = train_one_epoch(model=model,
                                                 optimizer=optimizer,
                                                 data_loader=train_loader,
                                                 device=device,
                                                 epoch=epoch)
-
-
         # validate
         val_loss = evaluate(model=model,
                                      data_loader=val_loader,
@@ -115,8 +111,7 @@ def main(args):
         tb_writer.add_scalar(tags[2], val_loss, epoch)
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
-        if epoch % 5 == 0:
-            # 保存模型
+        if epoch % 1 == 0:  # 保存模型
             torch.save(model.state_dict(), "./CNNweights/model-{}.pth".format(epoch))
 
 
@@ -126,11 +121,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--lr', type=float, default=0.00001)
     parser.add_argument('--lrf', type=float, default=0.01)
-
-
     parser.add_argument('--model-name', default='', help='create model name')
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
 
     opt = parser.parse_args()
-
     main(opt)
