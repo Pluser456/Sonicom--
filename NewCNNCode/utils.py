@@ -94,13 +94,16 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     model.train()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
     optimizer.zero_grad()
  
-    data_loader = tqdm(data_loader, file=sys.stdout)
+    # 仅在主进程显示进度条
+    if rank == 0:
+        data_loader = tqdm(data_loader, file=sys.stdout)
+    
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
@@ -116,22 +119,34 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         # 反向传播
         loss.backward()
 
-        # +++ 新增梯度裁剪（添加在此处）+++
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)  # 限制梯度范数为5
-        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
+        # 梯度裁剪
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        
+        # 仅在主进程更新进度条描述
+        if rank == 0:
+            data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
+        
         optimizer.step()
         optimizer.zero_grad()
  
+    # 同步所有GPU上的损失
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(accu_loss)
+        accu_loss = accu_loss / torch.distributed.get_world_size()
+    
     return accu_loss.item() / (step + 1)
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device, epoch):
+def evaluate(model, data_loader, device, epoch, rank=0):
     model.eval()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
  
-    data_loader = tqdm(data_loader, file=sys.stdout)
+    # 仅在主进程显示进度条
+    if rank == 0:
+        data_loader = tqdm(data_loader, file=sys.stdout)
+    
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
@@ -141,12 +156,18 @@ def evaluate(model, data_loader, device, epoch):
 
         # 前向传播
         output = model(imageleft, imageright, pos)
-        # output = model(imageleft, pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach()  # detach() 防止梯度传播
 
-        data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(
-            epoch, accu_loss.item() / (step + 1)
-        )
+        # 仅在主进程更新进度条描述
+        if rank == 0:
+            data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(
+                epoch, accu_loss.item() / (step + 1)
+            )
+    
+    # 同步所有GPU上的损失
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(accu_loss)
+        accu_loss = accu_loss / torch.distributed.get_world_size()
  
     return accu_loss.item() / (step + 1)
