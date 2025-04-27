@@ -1,3 +1,4 @@
+from multiprocessing import context
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -39,6 +40,25 @@ class DataGenerator():
         target_indices = batch_indices[:, :train_target_num]
         context_indices = batch_indices[:, train_target_num:]
         target_x = self.train_positions[target_indices]
+        target_y = self.gaussian(target_x).unsqueeze(-1)
+        context_x = self.train_positions[context_indices]
+        context_y = self.gaussian(context_x).unsqueeze(-1)
+
+        return (target_x, target_y), (context_x, context_y)
+    
+    def get_test_samples(self):
+        # 生成测试样本
+        test_batch_num = self.max_samples*2
+        test_target_num = test_batch_num // 8
+        test_context_num = test_batch_num - test_target_num
+
+        target_indices = np.zeros((self.batch_size, test_target_num), dtype=int)
+        context_indices = np.zeros((self.batch_size, test_context_num), dtype=int)
+        for i in range(self.batch_size):
+            target_indices[i] = np.random.choice(self.test_positions.size(0), test_target_num, replace=False)
+            context_indices[i] = np.random.choice(self.train_positions.size(0), test_context_num, replace=False)
+            
+        target_x = self.test_positions[target_indices]
         target_y = self.gaussian(target_x).unsqueeze(-1)
         context_x = self.train_positions[context_indices]
         context_y = self.gaussian(context_x).unsqueeze(-1)
@@ -235,7 +255,7 @@ def plot_gaussian_surface(mean, cov, model):
     
     gaussian = Gaussian2D(mean.to(device), cov.to(device))  # 添加 to(device)
     train_data_generator = DataGenerator(batch_size=1, mean=mean, cov=cov)
-    (target_x, target_y), (context_x, context_y) = train_data_generator.get_train_samples()
+    (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples()
     
     # 将输入移至正确的设备
     target_x = target_x.to(device)
@@ -282,7 +302,19 @@ for epoch in range(6001):
     loss.backward()
     optimizer.step()
     if epoch % 600 == 0:
-        print(f'Epoch {epoch}, Loss: {loss.item()}')
-        # 绘制训练样本和拟合的高斯函数
+        print(f'Epoch {epoch}, Train Loss: {loss.item()}')
+        with torch.no_grad():
+            # 生成测试样本
+            (target_x, target_y), (context_x, context_y) = train_data_generator.get_test_samples()
+            target_x = target_x.to(device)
+            target_y = target_y.to(device)
+            context_x = context_x.to(device)
+            context_y = context_y.to(device)
+            mu, log_var = model(context_x, context_y, target_x)
+            pred_target_y = mu.squeeze(0).cpu().numpy()
+            dist = distributions.Normal(mu, torch.exp(log_var / 2))
+            loss = -dist.log_prob(target_y).mean()
+            print(f'Epoch {epoch}, Test Loss: {loss.item()}')
+            # 绘制训练样本和拟合的高斯函数
         plot_gaussian_surface(torch.tensor([0.0, 0.0]), 
                               torch.tensor([[1.0, 0.5], [0.5, 1.0]]), model)
