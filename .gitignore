@@ -9,3 +9,4 @@ runs/
 .idea/
 *.png
 *.pyc
+LSD_results.txt
