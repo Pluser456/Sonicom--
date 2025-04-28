@@ -116,7 +116,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
 
         # 直接使用 prediction_net 而不是完整模型
         # output = model.prediction_net(img_features, pos)
-        mu = model.prediction_net(context_x, context_y, target_x)
+        mu = model.anp(context_x, context_y, target_x)
         loss = loss_function(mu, target_y)
         accu_loss += loss.detach()
 
