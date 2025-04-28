@@ -1,4 +1,3 @@
-from ast import mod
 import os
 import torch
 import torch.nn as nn
@@ -24,18 +23,16 @@ def main():
     # 数据分割
     dataset_paths = split_dataset("Ear_image_gray", "FFT_HRTF")
     
-    
     # 初始化模型
     model = TestNet().to(device)
-    feature_extractor= model.feature_extractor
-    feature_extractor_manager = FeatureExtractorManager(feature_extractor)
+    feature_extractor = model.feature_extractor
     
     # 创建数据集
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        feature_extractor=feature_extractor_manager,
+        device=device,
         transform=data_transform,
         calc_mean=True,
         mode="both"
@@ -45,7 +42,7 @@ def main():
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
-        feature_extractor=feature_extractor_manager,
+        device=device,
         transform=data_transform,
         calc_mean=False,
         mode="both",
@@ -68,12 +65,6 @@ def main():
         collate_fn=test_dataset.collate_fn
     )
     
-
-    
-    # # 由于我们已经提前计算了特征，可以冻结特征提取器的参数
-    # for param in model.feature_extractor.parameters():
-    #     param.requires_grad = False
-    
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     
     # 训练循环
@@ -93,8 +84,6 @@ def main():
         if val_loss < best_loss:
             best_loss = val_loss
             torch.save(model.state_dict(), "best_model.pth")
-            torch.save(model.prediction_net.state_dict(), "best_prediction_net.pth")
-            torch.save(model.feature_extractor.state_dict(), "best_feature_extractor.pth")
             print(f"Saved best model with validation loss: {best_loss:.4f}")
 
 if __name__ == "__main__":
