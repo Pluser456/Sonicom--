@@ -12,7 +12,8 @@ from utils import split_dataset, train_one_epoch, evaluate
 def main():
     # 设备配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+    if os.path.exists("./ANPweights") is False:
+        os.makedirs("./ANPweights")
     # 数据转换
     data_transform = transforms.Compose([
         # transforms.Resize((224, 224)),
@@ -75,15 +76,18 @@ def main():
         train_loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
         
         # 验证
-        val_loss = evaluate(model, test_loader, device, epoch)
+        # val_loss = evaluate(model, test_loader, device, epoch)
         
-        print(f"Epoch {epoch}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+        # print(f"Epoch {epoch}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
         
         # 保存最佳模型
-        if val_loss < best_loss:
-            best_loss = val_loss
-            torch.save(model.state_dict(), "best_model.pth")
-            print(f"Saved best model with validation loss: {best_loss:.4f}")
+        # if val_loss < best_loss:
+        #     best_loss = val_loss
+        #     torch.save(model.state_dict(), "best_model.pth")
+        #     print(f"Saved best model with validation loss: {best_loss:.4f}")
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), "./ANPweights/model-{}.pth".format(epoch))
+            print(f"Saved model at epoch {epoch}")
 
 if __name__ == "__main__":
     main()
