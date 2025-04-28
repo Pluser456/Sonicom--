@@ -244,8 +244,10 @@ class VisionTransformer(nn.Module):
         )'''
         # 修改head层（每个token独立预测）
         # # mark 改单频率将108改为1
-        self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(1)])
-        # self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(108)])
+        # self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(1)])
+        self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(108)])
+        # mark=== 新增全连接层 ===
+        self.final_fc = nn.Linear(108, 1)  # 输入维度108 → 输出维度1
         
         
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
@@ -335,13 +337,16 @@ class VisionTransformer(nn.Module):
         # attn_output shape: [B, 108, 768]'''
         outputs = []
         # mark
-        # for i in range(108):
-        for i in range(1):
+        # for i in range(1):
+        for i in range(108):
             # 对每个位置应用对应的线性层
             out = self.heads[i](attn_output[:, i, :])  # [B, 1]
             outputs.append(out)
         output = torch.stack(outputs, dim=1)  # [B, 108, 1]
         output = output.squeeze(-1)       # [B, 108]
+        
+        # mark 新增全连接层
+        output = self.final_fc(output)  # [B, 108] → [B, 1]
 
         return output
 
