@@ -9,7 +9,8 @@ import os
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
-    def __init__(self, hrtf_files, left_images, right_images, device, model, 
+    def __init__(self, hrtf_files, left_images, right_images, device, 
+                #  model, 
                 transform=None, calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
@@ -18,7 +19,7 @@ class SonicomDataSet(Dataset):
             left_images (list): 左耳图像路径列表
             right_images (list): 右耳图像路径列表
             device (str): 设备类型 - "cpu"/"cuda"
-            model: 模型实例
+            # model: 模型实例
             transform: 图像转换操作
             calc_mean (bool): 是否计算HRTF均值
             mode (str): 输出模式 - "left"/"right"/"both"
@@ -29,7 +30,7 @@ class SonicomDataSet(Dataset):
         self.transform = transform
         self.mode = mode
         self.device = device
-        self.model = model
+        # self.model = model
         left_tensors = []
         right_tensors = []
         
@@ -65,14 +66,14 @@ class SonicomDataSet(Dataset):
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
         file_idx = idx
-        position_idx = np.random.choice(self.positions_per_subject, 100, replace=False)
+        position_idx = sorted(np.random.choice(self.positions_per_subject, 100, replace=False))
 
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[file_idx], 'r') as data:
             # 获取HRTF
             hrtf = self._get_hrtf(data, position_idx)
             # 获取方位角
-            position = torch.tensor(data["theta"][:, position_idx].T).reshape(1, -1).type(torch.float32)
+            position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
 
         left_image = self.left_tensor[file_idx, :, :, :]
         right_image = self.right_tensor[file_idx, :, :, :]
@@ -90,16 +91,16 @@ class SonicomDataSet(Dataset):
         if self.mode == "left":
             hrtf_data = data["F_left"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_left[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).reshape(1, -1).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
         elif self.mode == "right":
             hrtf_data = data["F_right"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_right[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).reshape(1, -1).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
         else:  # both
             left_data = 20 * np.log10(data["F_left"][position_idx, :]) - self.log_mean_hrtf_left[position_idx, :]
             right_data = 20 * np.log10(data["F_right"][position_idx, :]) - self.log_mean_hrtf_right[position_idx, :]
-            left_hrtf = torch.tensor(left_data).reshape(1, -1).type(torch.float32)
-            right_hrtf = torch.tensor(right_data).reshape(1, -1).type(torch.float32)
+            left_hrtf = torch.tensor(left_data).type(torch.float32)
+            right_hrtf = torch.tensor(right_data).type(torch.float32)
             hrtf = torch.cat([left_hrtf, right_hrtf], dim=1)
         return hrtf
 
@@ -223,14 +224,3 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
             "image_feature": image_features,
             "meanlog": meanlog
         }
-
-def get_contexttarget(sample_batch, device,model):
-    """管理上下文和目标数据"""
-    left_image = sample_batch["left_image"]
-    right_image = sample_batch["right_image"]
-    pos = sample_batch["position"].squeeze(1).to(device)
-    target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
-
-    image_feature = model.feature_extractor(left_image, right_image)
-    
-    
