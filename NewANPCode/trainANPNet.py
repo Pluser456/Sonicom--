@@ -1,3 +1,4 @@
+from ast import mod
 import os
 import torch
 import torch.nn as nn
@@ -5,7 +6,7 @@ import torch.optim as optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from TestNet import TestNet, FeatureExtractor, PredictionNet
+from TestNet import TestNet
 from new_dataset import SonicomDataSet, FeatureExtractorManager
 from utils import split_dataset, train_one_epoch, evaluate
 
@@ -15,22 +16,26 @@ def main():
     
     # 数据转换
     data_transform = transforms.Compose([
-        transforms.Resize((224, 224)),
+        # transforms.Resize((224, 224)),
         transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
     ])
     
     # 数据分割
     dataset_paths = split_dataset("Ear_image_gray", "FFT_HRTF")
     
-    # 初始化特征提取器管理器
-    feature_manager = FeatureExtractorManager()
+    
+    # 初始化模型
+    model = TestNet().to(device)
+    feature_extractor= model.feature_extractor
+    feature_extractor_manager = FeatureExtractorManager(feature_extractor)
     
     # 创建数据集
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        feature_extractor=feature_manager,
+        feature_extractor=feature_extractor_manager,
         transform=data_transform,
         calc_mean=True,
         mode="both"
@@ -40,7 +45,7 @@ def main():
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
-        feature_extractor=feature_manager,
+        feature_extractor=feature_extractor_manager,
         transform=data_transform,
         calc_mean=False,
         mode="both",
@@ -63,14 +68,12 @@ def main():
         collate_fn=test_dataset.collate_fn
     )
     
-    # 初始化模型
-    model = TestNet().to(device)
+
     
     # # 由于我们已经提前计算了特征，可以冻结特征提取器的参数
     # for param in model.feature_extractor.parameters():
     #     param.requires_grad = False
     
-    # 只优化预测网络的参数
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     
     # 训练循环

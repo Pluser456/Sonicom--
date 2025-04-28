@@ -210,12 +210,9 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
     
 class FeatureExtractorManager:
     """特征提取管理器"""
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, extractor=None):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.extractor = FeatureExtractor().to(self.device)
-        if model_path and os.path.exists(model_path):
-            self.extractor.load_state_dict(torch.load(model_path))
-        self.extractor.train()
+        self.extractor = extractor if extractor is not None else FeatureExtractor().to(self.device)
         
         # 用于存储特征的字典
         self.features_cache = {}
