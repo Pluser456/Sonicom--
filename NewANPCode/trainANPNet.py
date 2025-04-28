@@ -34,7 +34,7 @@ def main():
         device=device,
         transform=data_transform,
         calc_mean=True,
-        mode="both"
+        mode="left"
     )
     
     test_dataset = SonicomDataSet(
@@ -44,7 +44,7 @@ def main():
         device=device,
         transform=data_transform,
         calc_mean=False,
-        mode="both",
+        mode="left",
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )

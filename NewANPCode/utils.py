@@ -1,4 +1,5 @@
 import os
+from re import S
 import h5py
 import numpy as np
 import sys
@@ -177,15 +178,35 @@ def evaluate(model, data_loader, device, epoch, rank=0):
 
 class ContextTargetManager():
     """管理上下文和目标数据"""
-    def __init__(self, device, model, reuse_num=10):
+    def __init__(self, device, model, reuse_num=10, target_num=100):
         self.reuse_time = reuse_num
         self.device = device
         self.model = model
+        self.target_num = target_num
         
     def get_contexttarget(self, sample_batch):
         """管理上下文和目标数据"""
         left_image = sample_batch["left_image"]
         right_image = sample_batch["right_image"]
         pos = sample_batch["position"].squeeze(1).to(self.device)
-        target = sample_batch["hrtf"].squeeze(1)[:, :].to(self.device)
         image_feature = self.model.feature_extractor(left_image, right_image)
+        image_feature = image_feature.unsqueeze(1).repeat(1, pos.shape[1], 1)
+        features = torch.cat([image_feature, pos], dim=2)
+        features = features.reshape(-1, features.shape[-1])
+        target = sample_batch["hrtf"].squeeze(1).to(self.device)
+        target = target.reshape(-1, target.shape[-1])
+
+        
+        # 选择上下文和目标数据
+        batch_indices = np.zeros((self.reuse_time, target.shape[0]), dtype=int)
+        for i in range(self.reuse_time):
+            # 打乱顺序
+            # batch_indices[i] = batch_indices[i][torch.randperm(batch_indices[i].shape[0])]
+            batch_indices[i] = np.random.permutation(target.shape[0])
+        target_indices = batch_indices[:, :self.target_num]
+        context_indices = batch_indices[:, self.target_num:]
+        target_x = features[target_indices]
+        target_y = target[target_indices]
+        context_x = features[context_indices]
+        context_y = target[context_indices]
+        return (target_x, target_y), (context_x, context_y)
