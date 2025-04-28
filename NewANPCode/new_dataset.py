@@ -220,27 +220,28 @@ class FeatureExtractorManager:
     def extract_features(self, left_image_paths, right_image_paths, transform):
         """提取并缓存特征"""
         features = []
+        left_tensors = []
+        right_tensors = []
         
         for i, (left_path, right_path) in enumerate(zip(left_image_paths, right_image_paths)):
             # 创建特征的唯一标识
             feature_key = f"{left_path}_{right_path}"
-            
-            # 检查是否已经缓存
-            if feature_key in self.features_cache:
-                features.append(self.features_cache[feature_key])
-                continue
             
             # 加载和处理图像
             left_img = Image.open(left_path).convert('L')
             right_img = Image.open(right_path).convert('L')
             left_tensor = transform(left_img).unsqueeze(0).to(self.device)
             right_tensor = transform(right_img).unsqueeze(0).to(self.device)
+            left_tensors.append(left_tensor)
+            right_tensors.append(right_tensor)
             
-            # 提取特征
-            feature = self.extractor(left_tensor, right_tensor)
-                
-            # 缓存特征
-            features.append(feature)
+        left_tensor = torch.cat(left_tensors, dim=0)
+        right_tensor = torch.cat(right_tensors, dim=0)
+        # 提取特征
+        feature = self.extractor(left_tensor, right_tensor)
+            
+        # 缓存特征
+        features.append(feature)
             
         return features
     
