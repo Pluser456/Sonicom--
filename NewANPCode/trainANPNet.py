@@ -6,7 +6,7 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from TestNet import TestNet
-from new_dataset import SonicomDataSet, FeatureExtractorManager
+from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 
 def main():
@@ -25,7 +25,6 @@ def main():
     
     # 初始化模型
     model = TestNet().to(device)
-    feature_extractor = model.feature_extractor
     
     # 创建数据集
     train_dataset = SonicomDataSet(

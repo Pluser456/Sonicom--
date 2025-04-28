@@ -5,7 +5,6 @@ import sys
 from tqdm import tqdm
 
 import torch
-from new_dataset import get_contexttarget
 
 def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> dict:
     """
@@ -111,7 +110,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
         # right_image = sample_batch["right_image"]        
         # pos = sample_batch["position"].squeeze(1).to(device)
         # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
-        (target_x, target_y), (context_x, context_y) = get_contexttarget(sample_batch,device,model)
+        contexttargetmanager = ContextTargetManager(device, model, reuse_num=10)
+        (target_x, target_y), (context_x, context_y) = contexttargetmanager.get_contexttarget(sample_batch)
 
         # 直接使用 prediction_net 而不是完整模型
         # output = model.prediction_net(img_features, pos)
@@ -174,3 +174,18 @@ def evaluate(model, data_loader, device, epoch, rank=0):
         accu_loss = accu_loss / torch.distributed.get_world_size()
  
     return accu_loss.item() / (step + 1)
+
+class ContextTargetManager():
+    """管理上下文和目标数据"""
+    def __init__(self, device, model, reuse_num=10):
+        self.reuse_time = reuse_num
+        self.device = device
+        self.model = model
+        
+    def get_contexttarget(self, sample_batch):
+        """管理上下文和目标数据"""
+        left_image = sample_batch["left_image"]
+        right_image = sample_batch["right_image"]
+        pos = sample_batch["position"].squeeze(1).to(self.device)
+        target = sample_batch["hrtf"].squeeze(1)[:, :].to(self.device)
+        image_feature = self.model.feature_extractor(left_image, right_image)
