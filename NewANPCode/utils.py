@@ -5,7 +5,7 @@ import sys
 from tqdm import tqdm
 
 import torch
-
+from new_dataset import get_contexttarget
 
 def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> dict:
     """
@@ -107,16 +107,16 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         # 修改这里使用特征而不是图像
-        img_features = sample_batch["image_feature"].to(device)
-        pos = sample_batch["position"].squeeze().to(device)
-        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
-        
-        img_features.sum().backward()  # 尝试反向传播
-        print(model.feature_extractor.conv1.weight.grad)
+        # left_image = sample_batch["left_image"]
+        # right_image = sample_batch["right_image"]        
+        # pos = sample_batch["position"].squeeze(1).to(device)
+        # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        (target_x, target_y), (context_x, context_y) = get_contexttarget(sample_batch,device,model)
 
         # 直接使用 prediction_net 而不是完整模型
-        output = model.prediction_net(img_features, pos)
-        loss = loss_function(output, target)
+        # output = model.prediction_net(img_features, pos)
+        mu = model.prediction_net(context_x, context_y, target_x)
+        loss = loss_function(mu, target_y)
         accu_loss += loss.detach()
 
         # 反向传播

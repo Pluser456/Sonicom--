@@ -6,19 +6,19 @@ from torchvision import transforms
 from utils import calculate_hrtf_mean
 import h5py
 import os
-from TestNet import FeatureExtractor
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
-    def __init__(self, hrtf_files, left_images, right_images, 
-                 feature_extractor, transform=None, calc_mean=True, 
+    def __init__(self, hrtf_files, left_images, right_images, device, model, 
+                transform=None, calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:
             hrtf_files (list): HRTF文件路径列表
             left_images (list): 左耳图像路径列表
             right_images (list): 右耳图像路径列表
-            feature_extractor (FeatureExtractorManager): 特征提取管理器
+            device (str): 设备类型 - "cpu"/"cuda"
+            model: 模型实例
             transform: 图像转换操作
             calc_mean (bool): 是否计算HRTF均值
             mode (str): 输出模式 - "left"/"right"/"both"
@@ -28,7 +28,23 @@ class SonicomDataSet(Dataset):
         self.right_images = right_images
         self.transform = transform
         self.mode = mode
-        self.feature_extractor = feature_extractor
+        self.device = device
+        self.model = model
+        left_tensors = []
+        right_tensors = []
+        
+        for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
+            
+            # 加载和处理图像
+            left_img = Image.open(left_path).convert('L')
+            right_img = Image.open(right_path).convert('L')
+            left_tensor = self.transform(left_img).unsqueeze(0).to(self.device)
+            right_tensor = self.transform(right_img).unsqueeze(0).to(self.device)
+            left_tensors.append(left_tensor)
+            right_tensors.append(right_tensor)
+            
+        self.left_tensor = torch.cat(left_tensors, dim=0)
+        self.right_tensor = torch.cat(right_tensors, dim=0)
         
         # 计算HRTF均值
         if calc_mean:
@@ -42,18 +58,14 @@ class SonicomDataSet(Dataset):
         with h5py.File(self.hrtf_files[0], 'r') as f:
             self.positions_per_subject = f["F_left"].shape[0]
             
-        # 提取并存储所有图像特征
-        self.image_features = self.feature_extractor.extract_features(
-            self.left_images, self.right_images, self.transform
-        )
-        
+
     def __len__(self):
-        return len(self.hrtf_files) * self.positions_per_subject
+        return len(self.hrtf_files)
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
-        file_idx = idx // self.positions_per_subject
-        position_idx = idx % self.positions_per_subject
+        file_idx = idx
+        position_idx = np.random.choice(self.positions_per_subject, 100, replace=False)
 
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[file_idx], 'r') as data:
@@ -62,13 +74,15 @@ class SonicomDataSet(Dataset):
             # 获取方位角
             position = torch.tensor(data["theta"][:, position_idx].T).reshape(1, -1).type(torch.float32)
 
-        # 获取预计算的特征
-        img_feature = self.image_features[file_idx]
+        left_image = self.left_tensor[file_idx, :, :, :]
+        right_image = self.right_tensor[file_idx, :, :, :]
+        
 
         return {
             "hrtf": hrtf,
             "position": position,
-            "image_feature": img_feature
+            "left_image": left_image,
+            "right_image": right_image,
         }
         
     def _get_hrtf(self, data, position_idx):
@@ -108,12 +122,14 @@ class SonicomDataSet(Dataset):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        image_features = torch.stack([item["image_feature"] for item in batch])
+        left_images = torch.stack([item["left_image"] for item in batch])
+        right_images = torch.stack([item["right_image"] for item in batch])
         
         return {
             "hrtf": hrtfs,
             "position": positions,
-            "image_feature": image_features
+            "left_image": left_images,
+            "right_image": right_images,
         }
 
 class SingleSubjectFeatureDataset(SonicomDataSet):
@@ -207,44 +223,14 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
             "image_feature": image_features,
             "meanlog": meanlog
         }
+
+def get_contexttarget(sample_batch, device,model):
+    """管理上下文和目标数据"""
+    left_image = sample_batch["left_image"]
+    right_image = sample_batch["right_image"]
+    pos = sample_batch["position"].squeeze(1).to(device)
+    target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+
+    image_feature = model.feature_extractor(left_image, right_image)
     
-class FeatureExtractorManager:
-    """特征提取管理器"""
-    def __init__(self, model_path=None, extractor=None):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.extractor = extractor if extractor is not None else FeatureExtractor().to(self.device)
-        
-        # 用于存储特征的字典
-        self.features_cache = {}
-        
-    def extract_features(self, left_image_paths, right_image_paths, transform):
-        """提取并缓存特征"""
-        features = []
-        left_tensors = []
-        right_tensors = []
-        
-        for i, (left_path, right_path) in enumerate(zip(left_image_paths, right_image_paths)):
-            # 创建特征的唯一标识
-            feature_key = f"{left_path}_{right_path}"
-            
-            # 加载和处理图像
-            left_img = Image.open(left_path).convert('L')
-            right_img = Image.open(right_path).convert('L')
-            left_tensor = transform(left_img).unsqueeze(0).to(self.device)
-            right_tensor = transform(right_img).unsqueeze(0).to(self.device)
-            left_tensors.append(left_tensor)
-            right_tensors.append(right_tensor)
-            
-        left_tensor = torch.cat(left_tensors, dim=0)
-        right_tensor = torch.cat(right_tensors, dim=0)
-        # 提取特征
-        feature = self.extractor(left_tensor, right_tensor)
-            
-        # 缓存特征
-        features.append(feature)
-            
-        return features
     
-    def clear_cache(self):
-        """清除特征缓存"""
-        self.features_cache = {}
