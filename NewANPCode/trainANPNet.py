@@ -64,10 +64,17 @@ def main():
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
+
+    auxiliary_loader = DataLoader(
+        train_dataset,
+        batch_size=train_dataset.len(),
+        shuffle=True,
+        collate_fn=train_dataset.collate_fn
+    )
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=189,
+        batch_size=100,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
@@ -83,7 +90,8 @@ def main():
         train_one_epoch(model, optimizer, train_loader, device, epoch)
         
         # 验证
-        evaluate(model, test_loader, device, epoch)
+        train_dataset.turn_auxiliary_mode(True)
+        evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
         
         # 保存最佳模型
         # if val_loss < best_loss:
