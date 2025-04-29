@@ -103,7 +103,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     # 仅在主进程显示进度条
     if rank == 0:
         data_loader = tqdm(data_loader, file=sys.stdout)
-    
+    contexttargetmanager = ContextTargetManager(device, model, reuse_num=10)
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         # 修改这里使用特征而不是图像
@@ -111,7 +111,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
         # right_image = sample_batch["right_image"]        
         # pos = sample_batch["position"].squeeze(1).to(device)
         # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
-        contexttargetmanager = ContextTargetManager(device, model, reuse_num=10)
+        
         (target_x, target_y), (context_x, context_y) = contexttargetmanager.get_contexttarget(sample_batch)
 
         # 直接使用 prediction_net 而不是完整模型

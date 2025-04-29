@@ -10,7 +10,7 @@ import os
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_images, right_images, device, 
-                #  model, 
+                 status="train", 
                 transform=None, calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
@@ -19,7 +19,7 @@ class SonicomDataSet(Dataset):
             left_images (list): 左耳图像路径列表
             right_images (list): 右耳图像路径列表
             device (str): 设备类型 - "cpu"/"cuda"
-            # model: 模型实例
+            status (str): 输出数据集模式 - "train"/"test"
             transform: 图像转换操作
             calc_mean (bool): 是否计算HRTF均值
             mode (str): 输出模式 - "left"/"right"/"both"

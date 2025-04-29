@@ -12,8 +12,18 @@ from utils import split_dataset, train_one_epoch, evaluate
 def main():
     # 设备配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     if os.path.exists("./ANPweights") is False:
         os.makedirs("./ANPweights")
+
+            # 从预训练模型加载权重
+    modelpath = "ANPweights/model-50.pth"
+    model = TestNet().to(device)
+    if os.path.exists(modelpath):
+        print("Load model from", modelpath)
+
+        model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    
     # 数据转换
     data_transform = transforms.Compose([
         # transforms.Resize((224, 224)),
@@ -23,9 +33,6 @@ def main():
     
     # 数据分割
     dataset_paths = split_dataset("Ear_image_gray", "FFT_HRTF")
-    
-    # 初始化模型
-    model = TestNet().to(device)
     
     # 创建数据集
     train_dataset = SonicomDataSet(
@@ -60,7 +67,7 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=32,
+        batch_size=189,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
@@ -68,24 +75,22 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     
     # 训练循环
-    num_epochs = 50
+    num_epochs = 480*5
     best_loss = float('inf')
     
     for epoch in range(1, num_epochs + 1):
         # 训练
-        train_loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
+        train_one_epoch(model, optimizer, train_loader, device, epoch)
         
         # 验证
-        # val_loss = evaluate(model, test_loader, device, epoch)
-        
-        # print(f"Epoch {epoch}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+        evaluate(model, test_loader, device, epoch)
         
         # 保存最佳模型
         # if val_loss < best_loss:
         #     best_loss = val_loss
         #     torch.save(model.state_dict(), "best_model.pth")
         #     print(f"Saved best model with validation loss: {best_loss:.4f}")
-        if epoch % 10 == 0:
+        if epoch % 150 == 0:
             torch.save(model.state_dict(), "./ANPweights/model-{}.pth".format(epoch))
             print(f"Saved model at epoch {epoch}")
 
