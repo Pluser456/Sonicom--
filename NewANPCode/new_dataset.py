@@ -50,7 +50,7 @@ class SonicomDataSet(Dataset):
         if self.status =="train":
             return len(self.hrtf_files)
         else: 
-            return len(self.test_hrtf_files) * self.positions_per_subject
+            return len(self.hrtf_files) * self.positions_per_subject
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引

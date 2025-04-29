@@ -151,7 +151,7 @@ def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
     if rank == 0:
         data_loader = tqdm(data_loader, file=sys.stdout)
 
-    auxiliary_batch = auxiliary_loader[0]
+    auxiliary_batch = next(iter(auxiliary_loader))
     
     contexttargetmanager = ContextTargetManager(device, model)
     for step, sample_batch in enumerate(data_loader):
@@ -206,10 +206,10 @@ class ContextTargetManager():
             auxi_features, auxi_target = self._get_target_and_feature(auxiliary, status="train")
             test_features, test_target = self._get_target_and_feature(sample_batch, status="test")
             # 选择上下文和目标数据
-            target_x = test_features
-            target_y = test_target
-            context_x = auxi_features
-            context_y = auxi_target
+            target_x = test_features.unsqueeze(0)
+            target_y = test_target.unsqueeze(0)
+            context_x = auxi_features.unsqueeze(0)
+            context_y = auxi_target.unsqueeze(0)
             return (target_x, target_y), (context_x, context_y)
             
     
