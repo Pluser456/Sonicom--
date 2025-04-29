@@ -17,7 +17,7 @@ def main():
         os.makedirs("./ANPweights")
 
             # 从预训练模型加载权重
-    modelpath = "ANPweights/model-50.pth"
+    modelpath = "ANPweights/model-2400.pth"
     model = TestNet().to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
@@ -52,6 +52,7 @@ def main():
         device=device,
         transform=data_transform,
         calc_mean=False,
+        status="test",
         mode="left",
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
@@ -67,14 +68,14 @@ def main():
 
     auxiliary_loader = DataLoader(
         train_dataset,
-        batch_size=train_dataset.len(),
+        batch_size=len(train_dataset),
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=100,
+        batch_size=50,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
@@ -89,16 +90,16 @@ def main():
         # 训练
         train_one_epoch(model, optimizer, train_loader, device, epoch)
         
-        # 验证
-        train_dataset.turn_auxiliary_mode(True)
-        evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
-        
-        # 保存最佳模型
-        # if val_loss < best_loss:
-        #     best_loss = val_loss
-        #     torch.save(model.state_dict(), "best_model.pth")
-        #     print(f"Saved best model with validation loss: {best_loss:.4f}")
         if epoch % 150 == 0:
+            # 验证
+            train_dataset.turn_auxiliary_mode(True)
+            val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
+            train_dataset.turn_auxiliary_mode(False)
+            # 保存最佳模型
+            if val_loss < best_loss:
+                best_loss = val_loss
+                torch.save(model.state_dict(), "./ANPweights/best_model.pth")
+                print(f"Saved best model with validation loss: {best_loss:.4f}")
             torch.save(model.state_dict(), "./ANPweights/model-{}.pth".format(epoch))
             print(f"Saved model at epoch {epoch}")
 
