@@ -10,7 +10,7 @@ import os
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_images, right_images, device, 
-                 status="train", 
+                 status="train",
                 transform=None, calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
@@ -25,28 +25,14 @@ class SonicomDataSet(Dataset):
             mode (str): 输出模式 - "left"/"right"/"both"
         """
         self.hrtf_files = self._validate_hrtf_files(hrtf_files)
-        self.left_images = left_images
-        self.right_images = right_images
         self.transform = transform
         self.mode = mode
         self.device = device
+        self.status = status
+        self.positions_chosen_num = 100  # 训练集每个文件选择的方位数
         # self.model = model
-        left_tensors = []
-        right_tensors = []
-        
-        for i, (left_path, right_path) in enumerate(zip(left_images, right_images)):
-            
-            # 加载和处理图像
-            left_img = Image.open(left_path).convert('L')
-            right_img = Image.open(right_path).convert('L')
-            left_tensor = self.transform(left_img).unsqueeze(0).to(self.device)
-            right_tensor = self.transform(right_img).unsqueeze(0).to(self.device)
-            left_tensors.append(left_tensor)
-            right_tensors.append(right_tensor)
-            
-        self.left_tensor = torch.cat(left_tensors, dim=0)
-        self.right_tensor = torch.cat(right_tensors, dim=0)
-        
+        self.left_tensor, self.right_tensor = self._get_image_tensor(left_images, right_images)
+
         # 计算HRTF均值
         if calc_mean:
             self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
@@ -61,23 +47,39 @@ class SonicomDataSet(Dataset):
             
 
     def __len__(self):
-        return len(self.hrtf_files)
+        if self.status =="train":
+            return len(self.hrtf_files)
+        else: 
+            return len(self.test_hrtf_files) * self.positions_per_subject
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
-        file_idx = idx
-        position_idx = sorted(np.random.choice(self.positions_per_subject, 100, replace=False))
+        if self.status == "train":
+            file_idx = idx
+            position_idx = sorted(np.random.choice(self.positions_per_subject, self.positions_chosen_num, replace=False))
 
-        # 读取HRTF数据
-        with h5py.File(self.hrtf_files[file_idx], 'r') as data:
-            # 获取HRTF
-            hrtf = self._get_hrtf(data, position_idx)
-            # 获取方位角
-            position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
+            # 读取HRTF数据
+            with h5py.File(self.hrtf_files[file_idx], 'r') as data:
+                # 获取HRTF
+                hrtf = self._get_hrtf(data, position_idx)
+                # 获取方位角
+                position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
 
-        left_image = self.left_tensor[file_idx, :, :, :]
-        right_image = self.right_tensor[file_idx, :, :, :]
-        
+            left_image = self.left_tensor[file_idx, :, :, :]
+            right_image = self.right_tensor[file_idx, :, :, :]
+        else:
+            file_idx = idx // self.positions_per_subject
+            position_idx = idx % self.positions_per_subject
+
+            # 读取HRTF数据
+            with h5py.File(self.hrtf_files[file_idx], 'r') as data:
+                # 获取HRTF
+                hrtf = self._get_hrtf(data, position_idx)
+                # 获取方位角
+                position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
+
+            left_image = self.left_tensor[file_idx, :, :, :]
+            right_image = self.right_tensor[file_idx, :, :, :]
 
         return {
             "hrtf": hrtf,
@@ -103,6 +105,30 @@ class SonicomDataSet(Dataset):
             right_hrtf = torch.tensor(right_data).type(torch.float32)
             hrtf = torch.cat([left_hrtf, right_hrtf], dim=1)
         return hrtf
+    
+    def _get_image_tensor(self, left_image_path, right_image_path):
+        """获取图像张量"""
+        left_tensors = []
+        right_tensors = []
+        for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
+            left_image = Image.open(left_path).convert('L')
+            right_image = Image.open(right_path).convert('L')
+            left_image_tensor = self.transform(left_image).unsqueeze(0).to(self.device)
+            right_image_tensor = self.transform(right_image).unsqueeze(0).to(self.device)
+            left_tensors.append(left_image_tensor)
+            right_tensors.append(right_image_tensor)
+        left_tensors = torch.cat(left_tensors, dim=0)
+        right_tensors = torch.cat(right_tensors, dim=0)
+        return left_tensors, right_tensors
+    
+    def turn_auxiliary_mode(self, mode: bool):
+        """切换为辅助测试集模式"""
+        if mode:
+            self.positions_chosen_num = self.positions_per_subject
+        else:
+            self.positions_chosen_num = 100
+            
+        
 
     @staticmethod
     def _validate_hrtf_files(hrtf_files):
