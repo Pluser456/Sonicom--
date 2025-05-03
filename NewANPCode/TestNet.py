@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from ResNet import resnet34 as ResNet
 
 class Residual(nn.Module):
     def __init__(self, input_channels, num_channels, use_1x1conv=False, strides=1):
@@ -42,26 +43,27 @@ class FeatureExtractor(nn.Module):
     def __init__(self):
         super(FeatureExtractor, self).__init__()
         # ResNet风格的卷积部分
-        self.conv_net = nn.Sequential(
-            # 初始卷积层
-            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+        # self.conv_net = nn.Sequential(
+        #     # 初始卷积层
+        #     nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3),
+        #     nn.BatchNorm2d(64),
+        #     nn.ReLU(),
+        #     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
 
-            # 残差块
-            *resnet_block(64, 64, 2, first_block=True),
-            *resnet_block(64, 256, 2),
+        #     # 残差块
+        #     *resnet_block(64, 64, 2, first_block=True),
+        #     *resnet_block(64, 256, 2),
 
-            # 最终处理
-            nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten()
-        )
-        self.imgfc = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-        )
+        #     # 最终处理
+        #     nn.AdaptiveAvgPool2d((1, 1)),
+        #     nn.Flatten()
+        # )
+        # self.imgfc = nn.Sequential(
+        #     nn.Linear(512, 256),
+        #     nn.ReLU(),
+        #     nn.Linear(256, 256),
+        # )
+        self.conv_net = ResNet()
 
     def forward(self, image_left, image_right):
         # 分别提取左、右耳特征
