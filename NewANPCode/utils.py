@@ -161,8 +161,6 @@ def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
 
     if rank == 0:
         data_loader = tqdm(data_loader, file=sys.stdout)
-    else:
-        data_loader = data_loader
 
     step_count = 0
     with torch.no_grad():

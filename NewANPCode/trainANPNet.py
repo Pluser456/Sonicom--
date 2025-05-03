@@ -17,7 +17,7 @@ def main():
         os.makedirs("./ANPweights")
 
             # 从预训练模型加载权重
-    modelpath = "ANPweights/model-2400.pth"
+    modelpath = "ANPweights/model-150.pth"
     model = TestNet().to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
@@ -75,7 +75,7 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=50,
+        batch_size=100,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
@@ -88,7 +88,7 @@ def main():
     
     for epoch in range(1, num_epochs + 1):
         # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
+        # train_one_epoch(model, optimizer, train_loader, device, epoch)
         
         if epoch % 150 == 0:
             # 验证
