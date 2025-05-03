@@ -225,6 +225,11 @@ class ANP(nn.Module):
         self.target_num = target_num
         self.dim_x = dim_x
         self.dim_y = dim_y
+        
+        # 添加缓存上下文的属性
+        self.cached_context_x = None
+        self.cached_context_y = None
+        self.cached_context_r = None
 
     def _prepare_features_target(self, feature_extractor, left_image, right_image, pos, hrtf, device, is_training):
         """ 内部函数：准备特征和目标张量 """
@@ -283,22 +288,47 @@ class ANP(nn.Module):
             target_x = target_x.unsqueeze(0)
             context_x = context_x.unsqueeze(0)
             context_y = context_y.unsqueeze(0)
+            
+            # 计算编码器输出
+            batch_r = self.encoder(context_x, context_y)
         else:
-            if auxiliary_data is None:
-                raise ValueError("Auxiliary data must be provided during evaluation.")
-
+            # 处理非训练模式（评估/推理）
             target_x, target_y_for_loss = self._prepare_features_target(feature_extractor, left_image, right_image, pos, hrtf, device, is_training=False)
-            aux_left = auxiliary_data["left_image"]
-            aux_right = auxiliary_data["right_image"]
-            aux_pos = auxiliary_data["position"]
-            aux_hrtf = auxiliary_data["hrtf"]
-
-            context_x, context_y = self._prepare_features_target(feature_extractor, aux_left, aux_right, aux_pos, aux_hrtf, device, is_training=True)
             target_x = target_x.unsqueeze(0)
-            context_x = context_x.unsqueeze(0)
-            context_y = context_y.unsqueeze(0)
+            
+            
+            # 如果缓存不存在或辅助数据已更改，则重新计算上下文
+            if (self.cached_context_x is None or 
+                self.cached_context_y is None or 
+                self.cached_context_r is None):
+                
+                aux_left = auxiliary_data["left_image"]
+                aux_right = auxiliary_data["right_image"]
+                aux_pos = auxiliary_data["position"]
+                aux_hrtf = auxiliary_data["hrtf"]
 
-        batch_r = self.encoder(context_x, context_y) # (batch_size, context_num, 64)
+                context_x, context_y = self._prepare_features_target(
+                    feature_extractor, aux_left, aux_right, aux_pos, aux_hrtf, 
+                    device, is_training=True
+                )
+                context_x = context_x.unsqueeze(0)
+                context_y = context_y.unsqueeze(0)
+                
+                # 计算并缓存编码器输出
+                batch_r = self.encoder(context_x, context_y)
+                
+                # 保存到缓存
+                self.cached_context_x = context_x
+                self.cached_context_y = context_y
+                self.cached_context_r = batch_r
+                
+            else:
+                # 使用缓存的数据
+                context_x = self.cached_context_x
+                context_y = self.cached_context_y  # 虽然不直接使用，但保留以备将来可能需要
+                batch_r = self.cached_context_r
+
+        # 使用上下文(context)数据对目标(target)数据进行注意力聚合
         r = self.attention_aggregator(target_x, context_x, batch_r)
         mu = self.decoder(r, target_x)
         mu_squeezed = mu.squeeze(0)

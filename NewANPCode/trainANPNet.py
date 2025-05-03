@@ -17,7 +17,7 @@ def main():
         os.makedirs("./ANPweights")
 
             # 从预训练模型加载权重
-    modelpath = "ANPweights/model-150.pth"
+    modelpath = "ANPweights/model-300.pth"
     model = TestNet().to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
@@ -61,7 +61,7 @@ def main():
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=32,
+        batch_size=18,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
@@ -80,7 +80,8 @@ def main():
         collate_fn=test_dataset.collate_fn
     )
     
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
     
     # 训练循环
     num_epochs = 480*5
@@ -88,7 +89,7 @@ def main():
     
     for epoch in range(1, num_epochs + 1):
         # 训练
-        # train_one_epoch(model, optimizer, train_loader, device, epoch)
+        train_one_epoch(model, optimizer, train_loader, device, epoch)
         
         if epoch % 150 == 0:
             # 验证
