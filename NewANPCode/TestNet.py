@@ -45,6 +45,13 @@ class FeatureExtractor(nn.Module):
         super(FeatureExtractor, self).__init__()
         self.conv_net = ResNet()
 
+        self.imgfc = nn.Sequential(
+            nn.Linear(2000, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+        )
+
+
     def forward(self, image_left, image_right):
         # 分别提取左、右耳特征
         img_feat_left = self.conv_net(image_left)  # [batch, 256]
@@ -195,12 +202,11 @@ class Decoder(nn.Module):
         return mu
 
 class ANP(nn.Module):
-    def __init__(self, feature_extractor, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes, target_num=100):
+    def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes, target_num=100):
         """
         初始化ANP模型。
 
         参数:
-            feature_extractor: 预初始化的特征提取器模块
             num_heads: 注意力头数量
             output_num: 注意力聚合器的输出维度 (通常等于 dim_v)
             dim_k: 注意力机制中键/查询的维度
@@ -212,7 +218,7 @@ class ANP(nn.Module):
             target_num: 训练时用作目标的点数
         """
         super(ANP, self).__init__()
-        self.feature_extractor = feature_extractor
+        # self.feature_extractor = feature_extractor
         self.encoder = Encoder(dim_x + dim_y, encoder_sizes)
         self.attention_aggregator = AttentionAggregator(num_heads, output_num, dim_k, dim_v, dim_x)
         self.decoder = Decoder(output_num, dim_x, dim_y, decoder_sizes)
@@ -220,11 +226,14 @@ class ANP(nn.Module):
         self.dim_x = dim_x
         self.dim_y = dim_y
 
-    def _prepare_features_target(self, left_image, right_image, pos, hrtf, device, is_training):
+    def _prepare_features_target(self, feature_extractor, left_image, right_image, pos, hrtf, device, is_training):
         """ 内部函数：准备特征和目标张量 """
         left_image = left_image.to(device)
         right_image = right_image.to(device)
-        image_feature = self.feature_extractor(left_image, right_image)
+        image_feature = feature_extractor(left_image, right_image)
+        # 释放不再需要的变量
+        del left_image, right_image
+        torch.cuda.empty_cache()  # 清理未使用的缓存
 
         pos = pos.to(device)
         hrtf = hrtf.to(device)
@@ -248,9 +257,9 @@ class ANP(nn.Module):
 
         return features, target
 
-    def forward(self, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
+    def forward(self, feature_extractor, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
         if is_training:
-            features, target = self._prepare_features_target(left_image, right_image, pos, hrtf, device, is_training=True)
+            features, target = self._prepare_features_target(feature_extractor, left_image, right_image, pos, hrtf, device, is_training=True)
             num_total_points = features.shape[0]
             if num_total_points <= self.target_num:
                 print(f"Warning: Not enough points ({num_total_points}) for target_num ({self.target_num}). Using all as target.")
@@ -278,13 +287,13 @@ class ANP(nn.Module):
             if auxiliary_data is None:
                 raise ValueError("Auxiliary data must be provided during evaluation.")
 
-            target_x, target_y_for_loss = self._prepare_features_target(left_image, right_image, pos, hrtf, device, is_training=False)
+            target_x, target_y_for_loss = self._prepare_features_target(feature_extractor, left_image, right_image, pos, hrtf, device, is_training=False)
             aux_left = auxiliary_data["left_image"]
             aux_right = auxiliary_data["right_image"]
             aux_pos = auxiliary_data["position"]
             aux_hrtf = auxiliary_data["hrtf"]
 
-            context_x, context_y = self._prepare_features_target(aux_left, aux_right, aux_pos, aux_hrtf, device, is_training=True)
+            context_x, context_y = self._prepare_features_target(feature_extractor, aux_left, aux_right, aux_pos, aux_hrtf, device, is_training=True)
             target_x = target_x.unsqueeze(0)
             context_x = context_x.unsqueeze(0)
             context_y = context_y.unsqueeze(0)
@@ -313,7 +322,6 @@ class TestNet(nn.Module):
         dim_k = 256
 
         self.anp = ANP(
-            feature_extractor=self.feature_extractor,
             num_heads=4,
             output_num=output_num,
             dim_k=dim_k,
@@ -326,4 +334,4 @@ class TestNet(nn.Module):
         )
 
     def forward(self, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
-        return self.anp(left_image, right_image, pos, hrtf, device, is_training, auxiliary_data)
+        return self.anp(self.feature_extractor, left_image, right_image, pos, hrtf, device, is_training, auxiliary_data)

@@ -30,7 +30,6 @@ class BasicBlock(nn.Module):
         downsample=None,
         groups: int = 1,
         base_width: int = 64,
-        dilation: int = 1,
         norm_layer=None,
     ) -> None:
         super().__init__()
@@ -38,8 +37,6 @@ class BasicBlock(nn.Module):
             norm_layer = nn.BatchNorm2d
         if groups != 1 or base_width != 64:
             raise ValueError("BasicBlock only supports groups=1 and base_width=64")
-        if dilation > 1:
-            raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride)
         self.bn1 = norm_layer(planes)
@@ -192,7 +189,7 @@ class ResNet(nn.Module):
     ) -> nn.Sequential:
         norm_layer = self._norm_layer
         downsample = None
-        previous_dilation = self.dilation
+        
         if self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 conv1x1(self.inplanes, planes * block.expansion, stride),
@@ -208,7 +205,6 @@ class ResNet(nn.Module):
                 downsample,
                 self.groups,
                 self.base_width,
-                previous_dilation,
                 norm_layer,
             )
         )
@@ -220,7 +216,6 @@ class ResNet(nn.Module):
                     planes,
                     groups=self.groups,
                     base_width=self.base_width,
-                    dilation=self.dilation,
                     norm_layer=norm_layer,
                 )
             )
