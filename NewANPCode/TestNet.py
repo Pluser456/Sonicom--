@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from ResNet import resnet34 as ResNet
+import numpy as np
 
 class Residual(nn.Module):
     def __init__(self, input_channels, num_channels, use_1x1conv=False, strides=1):
@@ -42,27 +43,6 @@ class FeatureExtractor(nn.Module):
     """图像特征提取网络"""
     def __init__(self):
         super(FeatureExtractor, self).__init__()
-        # ResNet风格的卷积部分
-        # self.conv_net = nn.Sequential(
-        #     # 初始卷积层
-        #     nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3),
-        #     nn.BatchNorm2d(64),
-        #     nn.ReLU(),
-        #     nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-
-        #     # 残差块
-        #     *resnet_block(64, 64, 2, first_block=True),
-        #     *resnet_block(64, 256, 2),
-
-        #     # 最终处理
-        #     nn.AdaptiveAvgPool2d((1, 1)),
-        #     nn.Flatten()
-        # )
-        # self.imgfc = nn.Sequential(
-        #     nn.Linear(512, 256),
-        #     nn.ReLU(),
-        #     nn.Linear(256, 256),
-        # )
         self.conv_net = ResNet()
 
     def forward(self, image_left, image_right):
@@ -73,33 +53,6 @@ class FeatureExtractor(nn.Module):
         # 拼接图像特征
         img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
         return self.imgfc(img_feat)  # [batch, 256]
-
-# class PredictionNet(nn.Module):
-#     """基于特征的预测网络"""
-#     def __init__(self):
-#         super(PredictionNet, self).__init__()
-#         # 位置特征处理网络
-#         self.fc0 = nn.Linear(2, 128)
-#         self.fc1 = nn.Linear(128, 256)
-#         self.fc2 = nn.Linear(256, 256)
-#         self.fc3 = nn.Linear(256, 128)
-#         self.fc4 = nn.Linear(128, 64)
-        
-#         # 输出层
-#         self.output = nn.Linear(256+64, 108)
-        
-#     def forward(self, img_features, pos):
-#         # 处理位置信息
-#         pos_feat = F.relu(self.fc0(pos))
-#         pos_feat = F.relu(self.fc1(pos_feat))
-#         pos_feat = F.relu(self.fc2(pos_feat))
-#         pos_feat = F.relu(self.fc3(pos_feat))
-#         pos_feat = F.relu(self.fc4(pos_feat))
-        
-#         # 特征融合
-#         combined = torch.cat([img_features, pos_feat], dim=1)
-#         return self.output(combined)
-
 
 
 def batch_mlp(input_dim, hidden_sizes):
@@ -238,59 +191,139 @@ class Decoder(nn.Module):
 
     def forward(self, r, target_x):
         decoder_input = torch.cat([r, target_x], dim=-1)
-        # decoder_output = self.mlp(decoder_input)
-        # mu, log_var = decoder_output.split(decoder_output.size(-1) // 2, dim=-1)
         mu = self.mlp(decoder_input)
         return mu
 
 class ANP(nn.Module):
-    def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes):
+    def __init__(self, feature_extractor, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes, target_num=100):
         """
         初始化ANP模型。
 
         参数:
+            feature_extractor: 预初始化的特征提取器模块
             num_heads: 注意力头数量
-            output_num: 输出维度
-            dim_k: 注意力机制中键的维度
-            dim_v: 注意力机制中值的维度
-            dim_x: 输入特征的维度
-            dim_y: 输出特征的维度
-            encoder_sizes: 编码器隐藏层大小列表
+            output_num: 注意力聚合器的输出维度 (通常等于 dim_v)
+            dim_k: 注意力机制中键/查询的维度
+            dim_v: 注意力机制中值的维度 (也是编码器输出维度)
+            dim_x: 输入特征的维度 (图像特征 + 位置)
+            dim_y: 输出特征的维度 (HRTF)
+            encoder_sizes: 编码器隐藏层大小列表 (最后一层大小应为 dim_v)
             decoder_sizes: 解码器隐藏层大小列表
+            target_num: 训练时用作目标的点数
         """
         super(ANP, self).__init__()
+        self.feature_extractor = feature_extractor
         self.encoder = Encoder(dim_x + dim_y, encoder_sizes)
         self.attention_aggregator = AttentionAggregator(num_heads, output_num, dim_k, dim_v, dim_x)
         self.decoder = Decoder(output_num, dim_x, dim_y, decoder_sizes)
+        self.target_num = target_num
+        self.dim_x = dim_x
+        self.dim_y = dim_y
 
-    def forward(self, context_x, context_y, target_x):
-        # context_x: 上下文输入，形状为 (batch_size, context_num, 2)
-        # context_y: 上下文输出，形状为 (batch_size, context_num, 1)
-        # target_x: 目标输入，形状为 (batch_size, target_num, 2)
+    def _prepare_features_target(self, left_image, right_image, pos, hrtf, device, is_training):
+        """ 内部函数：准备特征和目标张量 """
+        left_image = left_image.to(device)
+        right_image = right_image.to(device)
+        image_feature = self.feature_extractor(left_image, right_image)
+
+        pos = pos.to(device)
+        hrtf = hrtf.to(device)
+
+        if is_training:
+            num_positions = pos.shape[1]
+            image_feature_repeated = image_feature.unsqueeze(1).repeat(1, num_positions, 1)
+            features = torch.cat([image_feature_repeated, pos], dim=2)
+            features = features.reshape(-1, features.shape[-1])
+            target = hrtf.reshape(-1, hrtf.shape[-1])
+        else:
+            features = torch.cat([image_feature, pos], dim=1)
+            target = hrtf
+
+        expected_feature_dim = self.dim_x
+        expected_target_dim = self.dim_y
+        if expected_feature_dim is not None and features.shape[-1] != expected_feature_dim:
+             raise ValueError(f"Feature dimension mismatch: expected {expected_feature_dim}, got {features.shape[-1]}")
+        if expected_target_dim is not None and target.shape[-1] != expected_target_dim:
+            raise ValueError(f"Target dimension mismatch: expected {expected_target_dim}, got {target.shape[-1]}")
+
+        return features, target
+
+    def forward(self, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
+        if is_training:
+            features, target = self._prepare_features_target(left_image, right_image, pos, hrtf, device, is_training=True)
+            num_total_points = features.shape[0]
+            if num_total_points <= self.target_num:
+                print(f"Warning: Not enough points ({num_total_points}) for target_num ({self.target_num}). Using all as target.")
+                target_x = features
+                target_y_for_loss = target
+                if num_total_points > 0:
+                   context_x = features[0:1]
+                   context_y = target[0:1]
+                else:
+                   return torch.zeros(num_total_points, self.dim_y, device=device), torch.zeros(num_total_points, self.dim_y, device=device)
+            else:
+                indices = np.random.permutation(num_total_points)
+                target_indices = indices[:self.target_num]
+                context_indices = indices[self.target_num:]
+
+                target_x = features[target_indices]
+                target_y_for_loss = target[target_indices]
+                context_x = features[context_indices]
+                context_y = target[context_indices]
+
+            target_x = target_x.unsqueeze(0)
+            context_x = context_x.unsqueeze(0)
+            context_y = context_y.unsqueeze(0)
+        else:
+            if auxiliary_data is None:
+                raise ValueError("Auxiliary data must be provided during evaluation.")
+
+            target_x, target_y_for_loss = self._prepare_features_target(left_image, right_image, pos, hrtf, device, is_training=False)
+            aux_left = auxiliary_data["left_image"]
+            aux_right = auxiliary_data["right_image"]
+            aux_pos = auxiliary_data["position"]
+            aux_hrtf = auxiliary_data["hrtf"]
+
+            context_x, context_y = self._prepare_features_target(aux_left, aux_right, aux_pos, aux_hrtf, device, is_training=True)
+            target_x = target_x.unsqueeze(0)
+            context_x = context_x.unsqueeze(0)
+            context_y = context_y.unsqueeze(0)
+
         batch_r = self.encoder(context_x, context_y) # (batch_size, context_num, 64)
         r = self.attention_aggregator(target_x, context_x, batch_r)
         mu = self.decoder(r, target_x)
-        return mu
+        mu_squeezed = mu.squeeze(0)
+
+        return mu_squeezed, target_y_for_loss
 
 class TestNet(nn.Module):
-    """完整网络，集成特征提取和预测"""
-    def __init__(self):
+    """完整网络，集成特征提取和ANP预测"""
+    def __init__(self, target_num_anp=100):
         super(TestNet, self).__init__()
         self.feature_extractor = FeatureExtractor()
-        # self.prediction_net = PredictionNet()
+        img_feature_dim = 256
+        pos_dim = 2
+        hrtf_dim = 108
+
+        dim_x = img_feature_dim + pos_dim
+        dim_y = hrtf_dim
+
+        dim_v = 256
+        output_num = 256
+        dim_k = 256
+
         self.anp = ANP(
+            feature_extractor=self.feature_extractor,
             num_heads=4,
-            output_num=256,
-            dim_k=256,
-            dim_v=256,
-            dim_x=258,
-            dim_y=108,
-            encoder_sizes=[512, 256, 256],
-            decoder_sizes=[512, 256]
+            output_num=output_num,
+            dim_k=dim_k,
+            dim_v=dim_v,
+            dim_x=dim_x,
+            dim_y=dim_y,
+            encoder_sizes=[512, 256, dim_v],
+            decoder_sizes=[512, 256],
+            target_num=target_num_anp
         )
-        
-    def forward(self, image_left, image_right, pos):
-        # 特征提取
-        img_features = self.feature_extractor(image_left, image_right)
-        # 预测
-        return self.anp(img_features, pos)
+
+    def forward(self, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
+        return self.anp(left_image, right_image, pos, hrtf, device, is_training, auxiliary_data)
