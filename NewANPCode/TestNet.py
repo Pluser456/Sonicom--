@@ -341,7 +341,7 @@ class TestNet(nn.Module):
         super(TestNet, self).__init__()
         self.feature_extractor = FeatureExtractor()
         img_feature_dim = 256
-        pos_dim = 2
+        pos_dim = 3
         hrtf_dim = 108
 
         dim_x = img_feature_dim + pos_dim

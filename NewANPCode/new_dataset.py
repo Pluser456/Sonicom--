@@ -63,7 +63,12 @@ class SonicomDataSet(Dataset):
                 # 获取HRTF
                 hrtf = self._get_hrtf(data, position_idx)
                 # 获取方位角
-                position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
+                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
+                position = torch.stack([
+                    torch.sin(original_position_rad[:, 0]), # sin(azimuth)
+                    torch.cos(original_position_rad[:, 0]), # cos(azimuth)
+                    torch.sin(original_position_rad[:, 1])  # sin(elevation)
+                ], dim=1)
 
             left_image = self.left_tensor[file_idx, :, :, :]
             right_image = self.right_tensor[file_idx, :, :, :]
@@ -76,7 +81,12 @@ class SonicomDataSet(Dataset):
                 # 获取HRTF
                 hrtf = self._get_hrtf(data, position_idx)
                 # 获取方位角
-                position = torch.tensor(data["theta"][:, position_idx].T).type(torch.float32)
+                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx]).unsqueeze(0).type(torch.float32))
+                position = torch.stack([
+                    torch.sin(original_position_rad[:, 0]), # sin(azimuth)
+                    torch.cos(original_position_rad[:, 0]), # cos(azimuth)
+                    torch.sin(original_position_rad[:, 1])  # sin(elevation)
+                ], dim=1)
 
             left_image = self.left_tensor[file_idx, :, :, :]
             right_image = self.right_tensor[file_idx, :, :, :]
@@ -112,7 +122,7 @@ class SonicomDataSet(Dataset):
         right_tensors = []
         for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
             left_image = Image.open(left_path).convert('L')
-            right_image = Image.open(right_path).convert('L')
+            right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
             left_image_tensor = self.transform(left_image).unsqueeze(0).to(self.device)
             right_image_tensor = self.transform(right_image).unsqueeze(0).to(self.device)
             left_tensors.append(left_image_tensor)
