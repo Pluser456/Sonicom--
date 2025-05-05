@@ -122,8 +122,8 @@ class SonicomDataSet(Dataset):
             left_voxel = np.load(left_path)
             right_voxel = np.load(right_path)
             right_voxel = np.flip(right_voxel, axis=1).copy()
-            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.uint8).unsqueeze(0).to(self.device)
-            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.uint8).unsqueeze(0).to(self.device)
+            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.float32).unsqueeze(0).to(self.device)
+            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0).to(self.device)
             left_tensors.append(left_voxel_tensor)
             right_tensors.append(right_voxel_tensor)
         left_tensors = torch.cat(left_tensors, dim=0)
@@ -158,8 +158,8 @@ class SonicomDataSet(Dataset):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        left_voxels = torch.stack([item["left_voxel"] for item in batch])
-        right_voxels = torch.stack([item["right_voxel"] for item in batch])
+        left_voxels = torch.stack([item["left_voxel"] for item in batch]).unsqueeze(1) # [B, 1, D, H, W]
+        right_voxels = torch.stack([item["right_voxel"] for item in batch]).unsqueeze(1) # [B, 1, D, H, W]
         
         return {
             "hrtf": hrtfs,

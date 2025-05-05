@@ -1,5 +1,4 @@
 import os
-from re import S
 import h5py
 import numpy as np
 import sys

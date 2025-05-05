@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from ResNet3D import resnet34 as ResNet
+from ResNet3D import resnet34_3d as ResNet
 import numpy as np
 
 
