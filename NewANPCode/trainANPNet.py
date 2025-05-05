@@ -17,7 +17,7 @@ def main():
         os.makedirs("./ANPweights")
 
             # 从预训练模型加载权重
-    modelpath = "ANPweights/model-300.pth"
+    modelpath = "ANPweights/model-750.pth"
     model = TestNet().to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
@@ -87,22 +87,22 @@ def main():
     num_epochs = 480*5
     best_loss = float('inf')
     
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(0, num_epochs):
         # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
+        # train_one_epoch(model, optimizer, train_loader, device, epoch)
         
-        if epoch % 150 == 0:
+        if epoch % 50 == 0:
             # 验证
             train_dataset.turn_auxiliary_mode(True)
             val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
             train_dataset.turn_auxiliary_mode(False)
             # 保存最佳模型
-            if val_loss < best_loss:
-                best_loss = val_loss
-                torch.save(model.state_dict(), "./ANPweights/best_model.pth")
-                print(f"Saved best model with validation loss: {best_loss:.4f}")
-            torch.save(model.state_dict(), "./ANPweights/model-{}.pth".format(epoch))
-            print(f"Saved model at epoch {epoch}")
+            # if val_loss < best_loss:
+            #     best_loss = val_loss
+            #     torch.save(model.state_dict(), "./ANPweights/best_model.pth")
+            #     print(f"Saved best model with validation loss: {best_loss:.4f}")
+            # torch.save(model.state_dict(), "./ANPweights/model-{}.pth".format(epoch))
+            # print(f"Saved model at epoch {epoch}")
 
 if __name__ == "__main__":
     main()
