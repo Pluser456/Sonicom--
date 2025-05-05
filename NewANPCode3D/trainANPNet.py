@@ -14,10 +14,10 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if os.path.exists("./ANP3Dweights") is False:
-        os.makedirs("./AN3Dweights")
+        os.makedirs("./ANP3Dweights")
 
     # 从预训练模型加载权重
-    modelpath = "AN3Dweights/model-300.pth"
+    modelpath = "./ANP3Dweights/model-300.pth"
     model = TestNet().to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)

@@ -121,9 +121,9 @@ class SonicomDataSet(Dataset):
         for _, (left_path, right_path) in enumerate(zip(left_voxel_path, right_voxel_path)):
             left_voxel = np.load(left_path)
             right_voxel = np.load(right_path)
-            right_voxel = np.flip(right_voxel, axis=1)
-            left_voxel_tensor = self.transform(left_voxel).unsqueeze(0).to(self.device)
-            right_voxel_tensor = self.transform(right_voxel).unsqueeze(0).to(self.device)
+            right_voxel = np.flip(right_voxel, axis=1).copy()
+            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.uint8).unsqueeze(0).to(self.device)
+            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.uint8).unsqueeze(0).to(self.device)
             left_tensors.append(left_voxel_tensor)
             right_tensors.append(right_voxel_tensor)
         left_tensors = torch.cat(left_tensors, dim=0)
