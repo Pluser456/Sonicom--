@@ -1,11 +1,8 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from PIL import Image
-from torchvision import transforms
 from utils import calculate_hrtf_mean
 import h5py
-import os
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
@@ -79,12 +76,12 @@ class SonicomDataSet(Dataset):
                 # 获取HRTF
                 hrtf = self._get_hrtf(data, position_idx)
                 # 获取方位角
-                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx]).unsqueeze(0).type(torch.float32))
+                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx]).type(torch.float32))
                 position = torch.stack([
-                    torch.sin(original_position_rad[:, 0]), # sin(azimuth)
-                    torch.cos(original_position_rad[:, 0]), # cos(azimuth)
-                    torch.sin(original_position_rad[:, 1])  # sin(elevation)
-                ], dim=1)
+                    torch.sin(original_position_rad[0]), # sin(azimuth)
+                    torch.cos(original_position_rad[0]), # cos(azimuth)
+                    torch.sin(original_position_rad[1])  # sin(elevation)
+                ])
 
             left_voxel = self.left_tensor[file_idx, :, :, :]
             right_voxel = self.right_tensor[file_idx, :, :, :]
@@ -122,8 +119,8 @@ class SonicomDataSet(Dataset):
             left_voxel = np.load(left_path)
             right_voxel = np.load(right_path)
             right_voxel = np.flip(right_voxel, axis=1).copy()
-            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.float32).unsqueeze(0).to(self.device)
-            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0).to(self.device)
+            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.float32).unsqueeze(0)
+            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0)
             left_tensors.append(left_voxel_tensor)
             right_tensors.append(right_voxel_tensor)
         left_tensors = torch.cat(left_tensors, dim=0)
