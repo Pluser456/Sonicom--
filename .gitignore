@@ -1,5 +1,6 @@
 Ear_image_gray/
 FFT_HRTF/
+Ear_voxel/
 .vscode/
 *.pth
 *.zip
