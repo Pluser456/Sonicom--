@@ -4,40 +4,6 @@ from torch.nn import functional as F
 from ResNet3D import resnet34 as ResNet
 import numpy as np
 
-class Residual(nn.Module):
-    def __init__(self, input_channels, num_channels, use_1x1conv=False, strides=1):
-        super().__init__()
-        self.conv1 = nn.Conv2d(input_channels, num_channels,
-                               kernel_size=3, padding=1, stride=strides)
-        self.conv2 = nn.Conv2d(num_channels, num_channels,
-                               kernel_size=3, padding=1)
-        if use_1x1conv:
-            self.conv3 = nn.Conv2d(input_channels, num_channels,
-                                   kernel_size=1, stride=strides)
-        else:
-            self.conv3 = None
-        self.bn1 = nn.BatchNorm2d(num_channels)
-        self.bn2 = nn.BatchNorm2d(num_channels)
-
-    def forward(self, X):
-        Y = F.relu(self.bn1(self.conv1(X)))
-        Y = self.bn2(self.conv2(Y))
-        if self.conv3:
-            X = self.conv3(X)
-        Y += X
-        return F.relu(Y)
-
-
-def resnet_block(input_channels, num_channels, num_residuals, first_block=False):
-    blk = []
-    for i in range(num_residuals):
-        if i == 0 and not first_block:
-            blk.append(Residual(input_channels, num_channels,
-                                use_1x1conv=True, strides=2))
-        else:
-            blk.append(Residual(num_channels, num_channels))
-    return blk
-
 
 class FeatureExtractor(nn.Module):
     """图像特征提取网络"""
@@ -52,10 +18,10 @@ class FeatureExtractor(nn.Module):
         )
 
 
-    def forward(self, image_left, image_right):
+    def forward(self, voxel_left, voxel_right):
         # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(image_left)  # [batch, 256]
-        img_feat_right = self.conv_net(image_right)  # [batch, 256]
+        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
+        img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
 
         # 拼接图像特征
         img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
@@ -231,13 +197,13 @@ class ANP(nn.Module):
         self.cached_context_y = None
         self.cached_context_r = None
 
-    def _prepare_features_target(self, feature_extractor, left_image, right_image, pos, hrtf, device, is_training):
+    def _prepare_features_target(self, feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training):
         """ 内部函数：准备特征和目标张量 """
-        left_image = left_image.to(device)
-        right_image = right_image.to(device)
-        image_feature = feature_extractor(left_image, right_image)
+        left_voxel = left_voxel.to(device)
+        right_voxel = right_voxel.to(device)
+        voxel_feature = feature_extractor(left_voxel, right_voxel)
         # 释放不再需要的变量
-        del left_image, right_image
+        del left_voxel, right_voxel
         torch.cuda.empty_cache()  # 清理未使用的缓存
 
         pos = pos.to(device)
@@ -245,12 +211,12 @@ class ANP(nn.Module):
 
         if is_training:
             num_positions = pos.shape[1]
-            image_feature_repeated = image_feature.unsqueeze(1).repeat(1, num_positions, 1)
-            features = torch.cat([image_feature_repeated, pos], dim=2)
+            voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
+            features = torch.cat([voxel_feature_repeated, pos], dim=2)
             features = features.reshape(-1, features.shape[-1])
             target = hrtf.reshape(-1, hrtf.shape[-1])
         else:
-            features = torch.cat([image_feature, pos], dim=1)
+            features = torch.cat([voxel_feature, pos], dim=1)
             target = hrtf
 
         expected_feature_dim = self.dim_x
@@ -262,9 +228,9 @@ class ANP(nn.Module):
 
         return features, target
 
-    def forward(self, feature_extractor, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
+    def forward(self, feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=True, auxiliary_data=None):
         if is_training:
-            features, target = self._prepare_features_target(feature_extractor, left_image, right_image, pos, hrtf, device, is_training=True)
+            features, target = self._prepare_features_target(feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=True)
             num_total_points = features.shape[0]
             if num_total_points <= self.target_num:
                 print(f"Warning: Not enough points ({num_total_points}) for target_num ({self.target_num}). Using all as target.")
@@ -293,7 +259,7 @@ class ANP(nn.Module):
             batch_r = self.encoder(context_x, context_y)
         else:
             # 处理非训练模式（评估/推理）
-            target_x, target_y_for_loss = self._prepare_features_target(feature_extractor, left_image, right_image, pos, hrtf, device, is_training=False)
+            target_x, target_y_for_loss = self._prepare_features_target(feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=False)
             target_x = target_x.unsqueeze(0)
             
             
@@ -302,8 +268,8 @@ class ANP(nn.Module):
                 self.cached_context_y is None or 
                 self.cached_context_r is None):
                 
-                aux_left = auxiliary_data["left_image"]
-                aux_right = auxiliary_data["right_image"]
+                aux_left = auxiliary_data["left_voxel"]
+                aux_right = auxiliary_data["right_voxel"]
                 aux_pos = auxiliary_data["position"]
                 aux_hrtf = auxiliary_data["hrtf"]
 
@@ -363,5 +329,5 @@ class TestNet(nn.Module):
             target_num=target_num_anp
         )
 
-    def forward(self, left_image, right_image, pos, hrtf, device, is_training=True, auxiliary_data=None):
-        return self.anp(self.feature_extractor, left_image, right_image, pos, hrtf, device, is_training, auxiliary_data)
+    def forward(self, left_voxel, right_voxel, pos, hrtf, device, is_training=True, auxiliary_data=None):
+        return self.anp(self.feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training, auxiliary_data)

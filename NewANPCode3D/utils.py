@@ -31,18 +31,18 @@ def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None) -> d
         # print(sorted(np.random.choice(190, size=12, replace=False)))
     
     # 获取并排序体素列表
-    image_list = os.listdir(voxel_dir)
-    image_list.sort(key=lambda x: int(x.split('.')[0].split('_')[0][1:]))
+    voxel_list = os.listdir(voxel_dir)
+    voxel_list.sort(key=lambda x: int(x.split('.')[0].split('_')[0][1:]))
     
     # 分离左右耳体素
-    left_image_list = [vox for vox in image_list if vox.endswith('left.npy')]
-    right_image_list = [vox for vox in image_list if vox.endswith('right.npy')]
+    left_voxel_list = [vox for vox in voxel_list if vox.endswith('left.npy')]
+    right_voxel_list = [vox for vox in voxel_list if vox.endswith('right.npy')]
     
     # 分割训练集和测试集
-    left_train = [x for i, x in enumerate(left_image_list) if i not in test_indices]
-    right_train = [x for i, x in enumerate(right_image_list) if i not in test_indices]
-    left_test = [x for i, x in enumerate(left_image_list) if i in test_indices]
-    right_test = [x for i, x in enumerate(right_image_list) if i in test_indices]
+    left_train = [x for i, x in enumerate(left_voxel_list) if i not in test_indices]
+    right_train = [x for i, x in enumerate(right_voxel_list) if i not in test_indices]
+    left_test = [x for i, x in enumerate(left_voxel_list) if i in test_indices]
+    right_test = [x for i, x in enumerate(right_voxel_list) if i in test_indices]
     
     # 从体素名称中提取编号
     train_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in left_train]
@@ -106,13 +106,13 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
 
     for step, sample_batch in enumerate(data_loader):
         # Extract data (ensure keys match your DataLoader output)
-        left_image = sample_batch["left_image"]
-        right_image = sample_batch["right_image"]
+        left_voxel = sample_batch["left_voxel"]
+        right_voxel = sample_batch["right_voxel"]
         pos = sample_batch["position"]
         hrtf = sample_batch["hrtf"]
 
         # Model now returns prediction and target
-        mu, target_y_sel = model(left_image, right_image, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
+        mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
 
         # Ensure target is on the correct device
         target_y_sel = target_y_sel.to(device)
@@ -166,12 +166,12 @@ def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
     with torch.no_grad():
         for step, sample_batch in enumerate(data_loader):
             step_count += 1
-            left_image = sample_batch["left_image"]
-            right_image = sample_batch["right_image"]
+            left_voxel = sample_batch["left_voxel"]
+            right_voxel = sample_batch["right_voxel"]
             pos = sample_batch["position"]
             hrtf = sample_batch["hrtf"]
 
-            mu, _ = model(left_image, right_image, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
+            mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
 
             target = hrtf.to(device)
 
