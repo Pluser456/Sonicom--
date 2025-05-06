@@ -149,8 +149,8 @@ def evaluate(model, data_loader, device, epoch, rank=0):
         # 数据迁移到设备
         imageleft = sample_batch["left_voxel"].to(device)
         imageright = sample_batch["right_voxel"].to(device)
-        pos = sample_batch["position"].squeeze().to(device)
-        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        pos = sample_batch["position"].to(device)
+        target = sample_batch["hrtf"].squeeze(1).to(device)
         target = target.reshape(-1, target.shape[-1])
 
         # 前向传播

@@ -64,7 +64,7 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=40,
+        batch_size=2,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
@@ -74,13 +74,13 @@ def main():
     
     # 训练循环
     num_epochs = 480*5
-    best_loss = 23.9
+    best_loss = float('inf')
     
     for epoch in range(0, num_epochs + 1):
         # 训练
-        # train_one_epoch(model, optimizer, train_loader, device, epoch)
+        train_one_epoch(model, optimizer, train_loader, device, epoch)
         
-        if epoch % 50 == 0:
+        if epoch % 5 == 0:
             # 验证
             # train_dataset.turn_auxiliary_mode(True)
             val_loss = evaluate(model, test_loader, device, epoch)
