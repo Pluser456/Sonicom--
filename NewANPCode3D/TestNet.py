@@ -168,7 +168,7 @@ class Decoder(nn.Module):
         return mu
 
 class ANP(nn.Module):
-    def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes, target_num=100):
+    def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x, dim_y, encoder_sizes, decoder_sizes, target_num=100, positions_num=100):
         """
         初始化ANP模型。
 
@@ -191,11 +191,14 @@ class ANP(nn.Module):
         self.target_num = target_num
         self.dim_x = dim_x
         self.dim_y = dim_y
+        self.positions_num = positions_num
         
         # 添加缓存上下文的属性
         self.cached_context_x = None
         self.cached_context_y = None
         self.cached_context_r = None
+
+        self.is_training = False
 
     def _prepare_features_target(self, feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training):
         """ 内部函数：准备特征和目标张量 """
@@ -231,32 +234,37 @@ class ANP(nn.Module):
     def forward(self, feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=True, auxiliary_data=None):
         if is_training:
             features, target = self._prepare_features_target(feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=True)
-            num_total_points = features.shape[0]
-            if num_total_points <= self.target_num:
-                print(f"Warning: Not enough points ({num_total_points}) for target_num ({self.target_num}). Using all as target.")
-                target_x = features
-                target_y_for_loss = target
-                if num_total_points > 0:
-                   context_x = features[0:1]
-                   context_y = target[0:1]
-                else:
-                   return torch.zeros(num_total_points, self.dim_y, device=device), torch.zeros(num_total_points, self.dim_y, device=device)
-            else:
-                indices = np.random.permutation(num_total_points)
-                target_indices = indices[:self.target_num]
-                context_indices = indices[self.target_num:]
+        
+            indices = np.random.permutation(self.positions_num)
+            voxels_num = left_voxel.shape[0] # 体素个数
+            # 选取目标点和上下文点，每个体素选取self.target_num个目标点，剩余的点作为上下文点
+            target_indices = (indices[:self.target_num] + (np.arange(voxels_num) * self.positions_num).reshape(-1, 1)).flatten()
+            context_indices = (indices[self.target_num:] + (np.arange(voxels_num) * self.positions_num).reshape(-1, 1)).flatten()
 
-                target_x = features[target_indices]
-                target_y_for_loss = target[target_indices]
-                context_x = features[context_indices]
-                context_y = target[context_indices]
+            target_x = features[target_indices]
+            target_y_for_loss = target[target_indices]
+            context_x = features[context_indices]
+            context_y = target[context_indices]
 
             target_x = target_x.unsqueeze(0)
             context_x = context_x.unsqueeze(0)
             context_y = context_y.unsqueeze(0)
-            
             # 计算编码器输出
             batch_r = self.encoder(context_x, context_y)
+            if self.is_training != is_training:
+                self.cached_context_x = context_x.detach().clone()
+                self.cached_context_r = batch_r.detach().clone()
+                self.is_training = is_training
+            else:
+                tmp_context_x = torch.cat([self.cached_context_x, context_x.detach().clone()], dim=1)
+                tmp_context_r = torch.cat([self.cached_context_r, batch_r.detach().clone()], dim=1)
+                # 使用缓存的数据，避免信息泄露
+                context_x = self.cached_context_x
+                batch_r = self.cached_context_r
+                # 将缓存的上下文数据与当前上下文数据拼接
+                self.cached_context_x = tmp_context_x
+                self.cached_context_r = tmp_context_r
+
         else:
             # 处理非训练模式（评估/推理）
             target_x, target_y_for_loss = self._prepare_features_target(feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training=False)
@@ -264,9 +272,7 @@ class ANP(nn.Module):
             
             
             # 如果缓存不存在或辅助数据已更改，则重新计算上下文
-            if (self.cached_context_x is None or 
-                self.cached_context_y is None or 
-                self.cached_context_r is None):
+            if self.is_training != is_training:
                 
                 aux_left = auxiliary_data["left_voxel"]
                 aux_right = auxiliary_data["right_voxel"]
@@ -287,7 +293,7 @@ class ANP(nn.Module):
                 self.cached_context_x = context_x
                 self.cached_context_y = context_y
                 self.cached_context_r = batch_r
-                
+                self.is_training = is_training
             else:
                 # 使用缓存的数据
                 context_x = self.cached_context_x
@@ -303,7 +309,7 @@ class ANP(nn.Module):
 
 class TestNet(nn.Module):
     """完整网络，集成特征提取和ANP预测"""
-    def __init__(self, target_num_anp=100):
+    def __init__(self, target_num_anp=100,positions_num=100):
         super(TestNet, self).__init__()
         self.feature_extractor = FeatureExtractor()
         img_feature_dim = 256
@@ -326,7 +332,8 @@ class TestNet(nn.Module):
             dim_y=dim_y,
             encoder_sizes=[512, 256, dim_v],
             decoder_sizes=[512, 256],
-            target_num=target_num_anp
+            target_num=target_num_anp,
+            positions_num=positions_num
         )
 
     def forward(self, left_voxel, right_voxel, pos, hrtf, device, is_training=True, auxiliary_data=None):

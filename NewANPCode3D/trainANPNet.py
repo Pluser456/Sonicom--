@@ -17,8 +17,9 @@ def main():
         os.makedirs("./ANP3Dweights")
 
     # 从预训练模型加载权重
-    modelpath = "./ANP3Dweights/model-300.pth"
-    model = TestNet(5).to(device)
+    modelpath = "./ANP3Dweights/model-2400.pth"
+    positions_chosen_num = 100 # 训练集每个文件选择的方位数
+    model = TestNet(target_num_anp=5, positions_num=positions_chosen_num).to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
 
@@ -34,6 +35,7 @@ def main():
         dataset_paths["left_train"],
         dataset_paths["right_train"],
         device=device,
+        positions_chosen_num=positions_chosen_num,
         calc_mean=True,
         mode="left"
     )
@@ -77,7 +79,7 @@ def main():
     
     # 训练循环
     num_epochs = 480*5
-    best_loss = float('inf')
+    best_loss = 23.9
     
     for epoch in range(0, num_epochs + 1):
         # 训练
@@ -88,7 +90,7 @@ def main():
             train_dataset.turn_auxiliary_mode(True)
             val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
             train_dataset.turn_auxiliary_mode(False)
-            # 保存最佳模型
+            # # 保存最佳模型
             if val_loss < best_loss:
                 best_loss = val_loss
                 torch.save(model.state_dict(), "./ANP3Dweights/best_model.pth")

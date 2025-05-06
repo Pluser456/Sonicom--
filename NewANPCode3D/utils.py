@@ -93,6 +93,7 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     model.train()
+    model.anp.is_training = False # 目的是利用anp类的内部逻辑清除原来缓存的上下文点
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
     optimizer.zero_grad()
