@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 from torch import nn
-from .utils import figure_to_tensor, get_freqresp_plot
+from utils import figure_to_tensor, get_freqresp_plot
 
 
 class CVAE(nn.Module):

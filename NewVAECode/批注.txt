@@ -1,7 +1,7 @@
 input 一张图片：任意大小，模型会resize
 output 空间HRTF：38个方位 257点HRTF
-运行代码的指令参考如下：   image      output_HRTF.mat       --nfft 512（不能改，必须保留）
-python ear_to_prtf.py configs/edges_median.json P0001_left.png C:/Users/10486/Desktop/itsadive_hybrid_structural_model-main/python/P0001_output.mat --nfft 512
+运行代码的指令参考如下：  py_file       config_file          image       output_HRTF.mat       --nfft 512（不能改，必须保留）
+python NewVAECode/ear_to_prtf.py NewVAECode/configs/edges_median.json NewVAECode/P0001_left.png NewVAECode/P0001_output.mat --nfft 512
 
 5.1更新：
 仔细阅读了vae_conv_cfg，输入为图像，隐藏层为标准正态分布，输出为图像。输入和输出图像的对比可见论文的figure3。
