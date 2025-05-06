@@ -7,7 +7,7 @@ import h5py
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, device, 
-                 status="train",
+                 status="train",positions_chosen_num=100,
                  calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
@@ -19,12 +19,13 @@ class SonicomDataSet(Dataset):
             status (str): 输出数据集模式 - "train"/"test"
             calc_mean (bool): 是否计算HRTF均值
             mode (str): 输出模式 - "left"/"right"/"both"
+            positions_chosen_num (int): 每个文件选择的方位数
         """
         self.hrtf_files = self._validate_hrtf_files(hrtf_files)
         self.mode = mode
         self.device = device
         self.status = status
-        self.positions_chosen_num = 100  # 训练集每个文件选择的方位数
+        self.positions_chosen_num = positions_chosen_num  # 训练集每个文件选择的方位数
         # self.model = model
         self.left_tensor, self.right_tensor = self._get_voxel_tensor(left_voxels, right_voxels)
 
