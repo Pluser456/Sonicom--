@@ -173,7 +173,7 @@ def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
 
             mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
 
-            target = hrtf.to(device)
+            target = hrtf.to(device).squeeze(0)
 
             loss = loss_function(mu, target)
             accu_loss += loss.detach()

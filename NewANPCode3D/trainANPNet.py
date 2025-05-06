@@ -17,9 +17,9 @@ def main():
         os.makedirs("./ANP3Dweights")
 
     # 从预训练模型加载权重
-    modelpath = "./ANP3Dweights/model-2400.pth"
-    positions_chosen_num = 100 # 训练集每个文件选择的方位数
-    model = TestNet(target_num_anp=5, positions_num=positions_chosen_num).to(device)
+    modelpath = "./ANP3Dweights/model-300.pth"
+    positions_chosen_num = 793 # 训练集每个文件选择的方位数
+    model = TestNet(target_num_anp=1, positions_num=positions_chosen_num).to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
 
@@ -71,12 +71,11 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=40,
+        batch_size=1,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    
-    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-5)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
     
     # 训练循环
