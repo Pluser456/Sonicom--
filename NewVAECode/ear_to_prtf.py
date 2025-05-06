@@ -44,13 +44,13 @@ def main():
     # parse
     args = parser.parse_args()
 
-    # load configs
+    # load configs 导入图片大小和模型存储路径cfg
     with open(args.cfg_path, 'r') as fp:
         cfg = json.load(fp)
     img_size = cfg['ears']['img_size']
     img_channels = cfg['ears']['img_channels']
 
-    # pick models
+    # pick models 模型定义
     EarsModelClass = {
         'vae_conv': VAECfg,
         'vae_resnet': ResNetVAECfg,
@@ -63,7 +63,7 @@ def main():
         'cvae_dense': CVAECfg,
     }.get(cfg['hrtf']['model_type'])
 
-    # load models
+    # load models 加载模型
     models = {}
     for ModelClass, model_type in zip([EarsModelClass, LatentModelClass, HrtfModelClass], ['ears', 'latent', 'hrtf']):
         # 根据配置文件加载每个模型的检查点路径
@@ -80,7 +80,7 @@ def main():
         models[model_type] = model
     print('### Models Loaded.')
 
-    # load and process ear image
+    # load and process ear image 导入图片并预处理
     print(f'### Loading and processing ear picture from {args.ear_path}...')
     img = Image.open(args.ear_path, 'r').convert('RGB')
     transforms = Compose([
@@ -92,7 +92,7 @@ def main():
     ear = ear.unsqueeze(0)
     print('### Done loading and processing.')
 
-    # calculate elevation range
+    # calculate elevation range 计算角度范围
     el_range = cfg['el_range']
     if el_range:
         el_range = create_range(el_range)
@@ -108,7 +108,7 @@ def main():
     elif az_range is not None:
         c = az_range.unsqueeze(-1)
 
-    # predict datapoints
+    # predict datapoints 前向传播预测数据
     print('### Predicting data...')
     ear, c = ear.to(args.device), c.to(args.device)
     with torch.no_grad():
@@ -124,7 +124,7 @@ def main():
     c = c.cpu().numpy()
     print(f'### Done predicting. Data shape: {hrtf.shape}')
 
-    # generate figure
+    # generate figure 
     if args.view:
         print('### Generating figure...')
         output_path_resps = os.path.splitext(args.output_path)[0] + '_resps.png'
