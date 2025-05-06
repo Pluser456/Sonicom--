@@ -1,7 +1,7 @@
 import torch
 import pytorch_lightning as pl
 from argparse import ArgumentParser
-from .vae_incept import VAE
+from vae_incept import VAE
 
 #init和loss_function与VAEcfg不同，其余相同
 #Loss_function提到下面这一篇论文
