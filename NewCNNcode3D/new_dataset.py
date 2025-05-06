@@ -86,6 +86,8 @@ class SonicomDataSet(Dataset):
 
             left_voxel = self.left_tensor[file_idx, :, :, :]
             right_voxel = self.right_tensor[file_idx, :, :, :]
+        
+        # print(f"体素数据形状: left={left_voxel.shape}, right={right_voxel.shape}")
 
         return {
             "hrtf": hrtf,
