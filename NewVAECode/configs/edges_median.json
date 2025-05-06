@@ -3,7 +3,13 @@
         "model_type": "vae_incept",
         "model_ckpt_path": "NewVAECode/checkpoints/vae_incept_edges.ckpt",
         "img_size": [256, 256],
-        "img_channels": 1
+        "img_channels": 1,
+        "encoder_channels": [32, 64, 128, 256],
+        "latent_size": 64,
+        "decoder_channels": [256, 128, 64, 32],
+        "kl_coeff": 1.0,  
+        "use_inception": true,  
+        "repeat_per_block": 1  
     },
     "latent": {
         "model_type": "dnn",
