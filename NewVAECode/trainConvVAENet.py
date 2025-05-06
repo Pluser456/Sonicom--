@@ -3,10 +3,11 @@ import argparse
 import json
 import torch
 import torch.optim as optim
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from new_dataset import SonicomDataSet
-from vae_conv_cfg import VAECfg  # 直接使用VAE配置类
+from vae_incept_cfg import InceptionVAECfg as VAECfg  
 from utils import split_dataset
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -21,7 +22,7 @@ def main(args):
     # 加载配置文件（参考ear_to_prtf的逻辑）
     with open(args.cfg_path, 'r') as f:
         cfg = json.load(f)
-    
+
     # 初始化VAE模型（核心修改点）
     model = VAECfg(
         input_size=[cfg['ears']['img_size'], cfg['ears']['img_size']],
@@ -30,7 +31,9 @@ def main(args):
             'encoder_channels': cfg['ears']['encoder_channels'],
             'latent_size': cfg['ears']['latent_size'],
             'decoder_channels': cfg['ears']['decoder_channels'],
-            'kl_coeff': cfg['ears']['kl_coeff']
+            'kl_coeff': cfg['ears']['kl_coeff'],
+            'use_inception': cfg['ears']['use_inception'],
+            'repeat_per_block': cfg['ears']['repeat_per_block']
         }
     ).to(device)
 
@@ -47,43 +50,42 @@ def main(args):
         transforms.Normalize([0.5], [0.5])
     ])
 
-    # 实例化数据集（修改目标为图像本身）
+    # 创建数据集
     train_dataset = SonicomDataSet(
-        hrtf_files=dataset_paths['train_hrtf_list'],
-        left_images=dataset_paths['left_train'],
-        right_images=dataset_paths['right_train'],
+        dataset_paths["train_hrtf_list"],
+        dataset_paths["left_train"],
+        dataset_paths["right_train"],
+        device=device,
         transform=data_transform,
-        mode="left",
-        target_type="image"  # 假设数据集支持返回图像本身作为目标
+        calc_mean=True,
+        mode="left"
     )
-
-    val_dataset = SonicomDataSet(
-        hrtf_files=dataset_paths['test_hrtf_list'],
-        left_images=dataset_paths['left_test'],
-        right_images=dataset_paths['right_test'],
+    
+    test_dataset = SonicomDataSet(
+        dataset_paths["test_hrtf_list"],
+        dataset_paths["left_test"],
+        dataset_paths["right_test"],
+        device=device,
         transform=data_transform,
-        mode="left",
-        target_type="image",
         calc_mean=False,
+        status="test",
+        mode="left",
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
 
-    # 数据加载器
-    train_loader = torch.utils.data.DataLoader(
+    train_loader = DataLoader(
         train_dataset,
-        batch_size=args.batch_size,
+        batch_size=18,
         shuffle=True,
-        pin_memory=True,
         collate_fn=train_dataset.collate_fn
     )
     
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=100,
         shuffle=False,
-        pin_memory=True,
-        collate_fn=val_dataset.collate_fn
+        collate_fn=test_dataset.collate_fn
     )
 
     # 使用Lightning Trainer（简化训练流程）
@@ -97,7 +99,7 @@ def main(args):
     )
     
     # 开始训练
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_loader, test_loader)
     
     # 保存最终模型
     torch.save(model.state_dict(), f"./VAEweights/{args.model_name}_final.pth")
@@ -105,7 +107,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # 新增配置文件参数
-    parser.add_argument('--cfg-path', type=str, required=True, help='Path to model config file')
+    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_median.json')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--model-name', default='vae_conv', help='Output model name')
