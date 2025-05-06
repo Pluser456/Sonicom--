@@ -8,7 +8,7 @@ class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, device, 
                  status="train",positions_chosen_num=100,
-                 calc_mean=True, 
+                 calc_mean=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:
@@ -43,51 +43,30 @@ class SonicomDataSet(Dataset):
             
 
     def __len__(self):
-        if self.status =="train":
-            return len(self.hrtf_files)
-        else: 
-            return len(self.hrtf_files) * self.positions_per_subject
+        return len(self.hrtf_files)
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
+        file_idx = idx
         if self.status == "train":
-            file_idx = idx
             position_idx = sorted(np.random.choice(self.positions_per_subject, self.positions_chosen_num, replace=False))
-
-            # 读取HRTF数据
-            with h5py.File(self.hrtf_files[file_idx], 'r') as data:
-                # 获取HRTF
-                hrtf = self._get_hrtf(data, position_idx)
-                # 获取方位角
-                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
-                position = torch.stack([
-                    torch.sin(original_position_rad[:, 0]), # sin(azimuth)
-                    torch.cos(original_position_rad[:, 0]), # cos(azimuth)
-                    torch.sin(original_position_rad[:, 1])  # sin(elevation)
-                ], dim=1)
-
-            left_voxel = self.left_tensor[file_idx, :, :, :]
-            right_voxel = self.right_tensor[file_idx, :, :, :]
         else:
-            file_idx = idx // self.positions_per_subject
-            position_idx = idx % self.positions_per_subject
+            position_idx = np.arange(self.positions_per_subject)  # 测试集使用所有方位
 
-            # 读取HRTF数据
-            with h5py.File(self.hrtf_files[file_idx], 'r') as data:
-                # 获取HRTF
-                hrtf = self._get_hrtf(data, position_idx)
-                # 获取方位角
-                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx]).type(torch.float32))
-                position = torch.stack([
-                    torch.sin(original_position_rad[0]), # sin(azimuth)
-                    torch.cos(original_position_rad[0]), # cos(azimuth)
-                    torch.sin(original_position_rad[1])  # sin(elevation)
-                ])
+        # 读取HRTF数据
+        with h5py.File(self.hrtf_files[file_idx], 'r') as data:
+            # 获取HRTF
+            hrtf = self._get_hrtf(data, position_idx)
+            # 获取方位角
+            original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
+            position = torch.stack([
+                torch.sin(original_position_rad[:, 0]), # sin(azimuth)
+                torch.cos(original_position_rad[:, 0]), # cos(azimuth)
+                torch.sin(original_position_rad[:, 1])  # sin(elevation)
+            ], dim=1)
 
-            left_voxel = self.left_tensor[file_idx, :, :, :]
-            right_voxel = self.right_tensor[file_idx, :, :, :]
-        
-        # print(f"体素数据形状: left={left_voxel.shape}, right={right_voxel.shape}")
+        left_voxel = self.left_tensor[file_idx, :, :, :]
+        right_voxel = self.right_tensor[file_idx, :, :, :]
 
         return {
             "hrtf": hrtf,
@@ -135,7 +114,7 @@ class SonicomDataSet(Dataset):
         if mode:
             self.positions_chosen_num = self.positions_per_subject
         else:
-            self.positions_chosen_num = 100
+            self.positions_chosen_num = self.positions_chosen_num
             
         
 
