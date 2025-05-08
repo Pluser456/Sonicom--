@@ -70,13 +70,19 @@ class InceptionVAECfg(pl.LightningModule):
             imgs.append(img)
         img = torch.hstack(imgs)
         return img
-
+    '''
     def loss_function(self, x, recon_x, mu, logvar):#此处与VAEcfg不同，论文待看
         # https://arxiv.org/abs/1312.6114 (Appendix B)
         BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, size_average=False) #BCE是？
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp()) * self.kl_coeff #少了一个/ ear_true.size(0)
         return BCE, KLD, BCE + KLD
-
+    '''
+    def loss_function(self, ear_true, ear_pred, means, log_var):
+        mse = torch.nn.functional.mse_loss(ear_pred, ear_true, reduction='sum') / ear_true.size(0)
+        kld = -0.5 * torch.sum(1 + log_var - means.pow(2) - log_var.exp()) * self.kl_coeff / ear_true.size(0)
+        loss = mse + kld #计算损失，MSE损失衡量的是重构误差，KL散度衡量的是潜在变量分布与标准正态分布之间的差异
+        return mse, kld, loss
+    
     def training_step(self, batch, batch_idx):#此处与VAEcfg相同
         _, losses = self._shared_eval(batch, batch_idx)
         mse, kld, loss = losses
@@ -96,7 +102,7 @@ class InceptionVAECfg(pl.LightningModule):
         results, losses = self._shared_eval(batch, batch_idx)
         mse, kld, loss = losses
         ear_pred, means, log_var = results
-        ear_true, labels = batch
+        ear_true = batch
         # log metrics
         # TODO add metrics: SD
         logs = {
@@ -111,7 +117,7 @@ class InceptionVAECfg(pl.LightningModule):
         self.logger.experiment.add_image(f'test/ears_{batch_idx:04}', img, self.current_epoch)
 
     def _shared_eval(self, batch, batch_idx):#此处与VAEcfg相同
-        ear_true, labels = batch
+        ear_true = batch
         results = self.forward(ear_true)
         losses = self.loss_function(ear_true, *results)
         return results, losses

@@ -154,7 +154,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
     optimizer.zero_grad()
- 
+    
     data_loader = tqdm(data_loader, file=sys.stdout)
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
@@ -184,7 +184,7 @@ def evaluate(model, data_loader, device, epoch):
     model.eval()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
- 
+    
     data_loader = tqdm(data_loader, file=sys.stdout)
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
