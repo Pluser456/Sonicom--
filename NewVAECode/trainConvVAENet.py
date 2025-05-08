@@ -6,7 +6,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from new_dataset import SonicomDataSet
+from new_dataset import SonicomDataSet,SonicomDataSetLeft
 from vae_incept_cfg import InceptionVAECfg as VAECfg  
 from utils import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
@@ -53,7 +53,7 @@ def main(args):
     ])
 
     # 创建数据集
-    train_dataset = SonicomDataSet(
+    train_dataset = SonicomDataSetLeft(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
@@ -63,7 +63,7 @@ def main(args):
         mode="left"
     )
     
-    test_dataset = SonicomDataSet(
+    test_dataset = SonicomDataSetLeft(
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
@@ -82,24 +82,35 @@ def main(args):
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
-    
+    print(train_dataset[0])
     test_loader = DataLoader(
         test_dataset,
         batch_size=100,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-
-    optimizer, lr_scheduler = model.configure_optimizers()
-
+    
     # 训练循环
     num_epochs = 480*5
+    '''
+    optimizers, lr_schedulers = model.configure_optimizers()
+    optimizer = optimizers[0]
+    lr_scheduler = lr_schedulers[0]
+
+    
     for epoch in range(0, num_epochs):
         # 训练
         train_one_epoch(model, optimizer, train_loader, device, epoch)
-        model.current_epoch = epoch
         model.training_epoch_end()
+    '''    
+    # 初始化 logger
+    logger = TensorBoardLogger("tb_logs", name="vae_5.8_model")
 
+    # 创建 Trainer 实例并传递 logger
+    trainer = Trainer(max_epochs=num_epochs, logger=logger)
+
+    # 开始训练
+    trainer.fit(model, train_loader,test_loader)
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

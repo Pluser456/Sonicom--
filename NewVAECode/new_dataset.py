@@ -260,3 +260,30 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
             "image_feature": image_features,
             "meanlog": meanlog
         }
+
+
+class SonicomDataSetLeft(SonicomDataSet):
+    """只返回左耳图像的数据集"""
+    def __init__(self, hrtf_files, left_images, right_images, device, 
+                 transform=None, calc_mean=True, 
+                 mode="left", provided_mean_left=None, provided_mean_right=None, status="train"):
+        super().__init__(hrtf_files, left_images, right_images, device, 
+                         transform=transform, calc_mean=calc_mean, 
+                         mode=mode, provided_mean_left=provided_mean_left, 
+                         provided_mean_right=provided_mean_right, status=status)
+        
+    def __getitem__(self, idx):
+        # 调用父类的 __getitem__ 方法获取完整的 batch
+        batch = super().__getitem__(idx)
+        # 只返回 left_image 部分的数据
+        return batch["left_image"]
+    
+    @staticmethod
+    def collate_fn(batch):
+        """自定义批处理函数：适配仅返回 left_image 的数据集"""
+        # batch 是一个由 left_image 张量组成的列表，例如 [tensor1, tensor2, ...]
+        left_images = torch.stack(batch)  # 直接堆叠所有 left_image 张量
+        
+        return {
+            "left_image": left_images
+        }
