@@ -82,7 +82,13 @@ def main(args):
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
-    print(train_dataset[0])
+    
+
+    batch_train_test = next(iter(train_loader))
+    print("Batch keys:", batch_train_test.keys())  
+    print("Shape of left_image:", batch_train_test["left_image"].shape)  
+    # 输出为: torch.Size([batch_size=4, 1, 256, 256])
+    
     test_loader = DataLoader(
         test_dataset,
         batch_size=100,

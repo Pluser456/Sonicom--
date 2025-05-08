@@ -142,7 +142,7 @@ class Decoder(nn.Module):
         )
 
     def forward(self, x):
-        out = F.upsample(x.view(-1, 256, 1, 1), scale_factor=8)
+        out = F.interpolate(x.view(-1, 256, 1, 1), scale_factor=8)
         out = self.downch1(self.stage1(out))
         out = self.downch2(self.stage2(out))
         out = self.downch3(self.stage3(out))
