@@ -14,8 +14,8 @@ class InceptionVAECfg(pl.LightningModule):
     def __init__(self, input_size, cfg):#与VAEcfg不同处使用#做标注
         super().__init__()
         self.save_hyperparameters()
-        self.grad_freq = 50
-        self.fig_freq = 10
+        self.grad_freq = 1
+        self.fig_freq = 1
         self.kl_coeff = cfg['kl_coeff']
         latent_size = cfg['latent_size']
         use_inception = cfg['use_inception']#
@@ -40,7 +40,7 @@ class InceptionVAECfg(pl.LightningModule):
     def forward(self, x):
         return self.vae(x)
 
-    def training_epoch_end(self, outputs):#此处与VAEcfg相同
+    def training_epoch_end(self):#此处与VAEcfg相同
         # log gradients
         if self.current_epoch % self.grad_freq == 0:
             for name, params in self.named_parameters():

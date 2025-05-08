@@ -152,7 +152,6 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
-    loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
     optimizer.zero_grad()
  
@@ -165,9 +164,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
 
         # 前向传播
-        #output = model(imageleft,imageright, pos)
-        output = model(imageleft,pos)
-        loss = loss_function(output, target)
+        loss = model.training_step(imageleft, step)
         accu_loss += loss.detach() # detach() 防止梯度传播
 
         # 反向传播
