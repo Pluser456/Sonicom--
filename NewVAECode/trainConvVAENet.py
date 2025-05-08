@@ -8,9 +8,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from new_dataset import SonicomDataSet
 from vae_incept_cfg import InceptionVAECfg as VAECfg  
-from utils import split_dataset
+from utils import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
+from tqdm import tqdm
+import sys
 
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -88,22 +90,17 @@ def main(args):
         collate_fn=test_dataset.collate_fn
     )
 
-    # 使用Lightning Trainer（简化训练流程）
-    logger = TensorBoardLogger("tb_logs", name="vae_conv")
-    trainer = Trainer(
-        max_epochs=args.epochs,
-        logger=logger,
-        devices=1 if str(device) == 'cuda:0' else 0,
-        accelerator='gpu' if 'cuda' in str(device) else 'cpu',
-        enable_checkpointing=False
-    )
-    
-    # 开始训练
-    trainer.fit(model, train_loader, test_loader)
-    
-    # 保存最终模型
-    torch.save(model.state_dict(), f"./VAEweights/{args.model_name}_final.pth")
+    optimizer, lr_scheduler = model.configure_optimizers()
 
+    # 训练循环
+    num_epochs = 480*5
+    for epoch in range(0, num_epochs):
+        # 训练
+        train_one_epoch(model, optimizer, train_loader, device, epoch)
+        model.current_epoch = epoch
+        model.training_epoch_end()
+
+        
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # 新增配置文件参数
