@@ -117,7 +117,7 @@ class InceptionVAECfg(pl.LightningModule):
         self.logger.experiment.add_image(f'test/ears_{batch_idx:04}', img, self.current_epoch)
 
     def _shared_eval(self, batch, batch_idx):#此处与VAEcfg相同
-        ear_true = batch
+        ear_true = batch['left_image']
         results = self.forward(ear_true)
         losses = self.loss_function(ear_true, *results)
         return results, losses
