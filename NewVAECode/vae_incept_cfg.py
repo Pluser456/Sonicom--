@@ -23,7 +23,7 @@ class InceptionVAECfg(pl.LightningModule):
         self.vae = VAE(latent_size=latent_size, use_inception=use_inception, repeat_per_block=repeat_per_block)
 
     def configure_optimizers(self):#此处与VAEcfg相同
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         lr_scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5624, patience=30, cooldown=25),
             #自动减少学习率，factor是减少的倍数，patience是观察几次后减少，cooldown是冷却时间
