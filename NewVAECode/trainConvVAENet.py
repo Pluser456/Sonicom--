@@ -112,8 +112,11 @@ def main(args):
     # 初始化 logger
     logger = TensorBoardLogger("tb_logs", name="vae_5.8_model")
 
-    # 创建 Trainer 实例并传递 logger
-    trainer = Trainer(max_epochs=num_epochs, logger=logger)
+    trainer = Trainer(
+        max_epochs=num_epochs,
+        logger=logger,
+        val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
+    )
 
     # 开始训练
     trainer.fit(model, train_loader,test_loader)
