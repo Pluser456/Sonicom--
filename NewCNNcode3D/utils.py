@@ -93,97 +93,80 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
     model.train()
-    model.anp.is_training = False # 目的是利用anp类的内部逻辑清除原来缓存的上下文点
-    loss_function = nn.MSELoss()
-    accu_loss = torch.zeros(1).to(device)
+    loss_function = torch.nn.MSELoss()
+    accu_loss = torch.zeros(1).to(device)  # 累计损失
     optimizer.zero_grad()
-
+ 
     # 仅在主进程显示进度条
     if rank == 0:
         data_loader = tqdm(data_loader, file=sys.stdout)
-    else:
-        data_loader = data_loader
-
+    
     for step, sample_batch in enumerate(data_loader):
-        # Extract data (ensure keys match your DataLoader output)
-        left_voxel = sample_batch["left_voxel"]
-        right_voxel = sample_batch["right_voxel"]
-        pos = sample_batch["position"]
-        hrtf = sample_batch["hrtf"]
+        # 数据迁移到设备
+        imageleft = sample_batch["left_voxel"].to(device)
+        imageright = sample_batch["right_voxel"].to(device)
+        pos = sample_batch["position"].squeeze(1).to(device)
+        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        target = target.reshape(-1, target.shape[-1])
 
-        # Model now returns prediction and target
-        mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
+        # 前向传播
+        output = model(imageleft, imageright, pos)
+        loss = loss_function(output, target)
+        accu_loss += loss.detach()  # detach() 防止梯度传播
 
-        # Ensure target is on the correct device
-        target_y_sel = target_y_sel.to(device)
-
-        # Handle cases where model returns zero tensors due to insufficient points
-        if mu.shape[0] == 0:
-            print(f"Warning: Skipping step {step} in epoch {epoch} due to zero points.")
-            continue
-
-        loss = loss_function(mu, target_y_sel)
-
-        accu_loss += loss.detach()
-
+        # 反向传播
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
+        # 梯度裁剪
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        
+        # 仅在主进程更新进度条描述
         if rank == 0:
             data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
-
+        
         optimizer.step()
         optimizer.zero_grad()
+ 
+    # 同步所有GPU上的损失
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(accu_loss)
+        accu_loss = accu_loss / torch.distributed.get_world_size()
+    
+    return accu_loss.item() / (step + 1)
 
-    # Sync loss across GPUs if using distributed training
-    if dist.is_initialized():
-        dist.all_reduce(accu_loss, op=dist.ReduceOp.SUM)
-        accu_loss = accu_loss / dist.get_world_size()
 
-    num_steps = step + 1
-    final_loss = accu_loss.item() / num_steps if num_steps > 0 else 0.0
-
-    return final_loss
-
-def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
+@torch.no_grad()
+def evaluate(model, data_loader, device, epoch, rank=0):
     model.eval()
-    loss_function = nn.MSELoss()
-    accu_loss = torch.zeros(1).to(device)
-
-    if auxiliary_loader is None:
-        raise ValueError("Auxiliary loader must be provided for evaluation")
-
-    try:
-        auxiliary_batch = next(iter(auxiliary_loader))
-    except StopIteration:
-        print("Error: Auxiliary loader is empty.")
-        return 0.0
-
+    loss_function = torch.nn.MSELoss()
+    accu_loss = torch.zeros(1).to(device)  # 累计损失
+ 
+    # 仅在主进程显示进度条
     if rank == 0:
         data_loader = tqdm(data_loader, file=sys.stdout)
+    
+    for step, sample_batch in enumerate(data_loader):
+        # 数据迁移到设备
+        imageleft = sample_batch["left_voxel"].to(device)
+        imageright = sample_batch["right_voxel"].to(device)
+        pos = sample_batch["position"].to(device)
+        target = sample_batch["hrtf"].squeeze(1).to(device)
+        target = target.reshape(-1, target.shape[-1])
 
-    step_count = 0
-    with torch.no_grad():
-        for step, sample_batch in enumerate(data_loader):
-            step_count += 1
-            left_voxel = sample_batch["left_voxel"]
-            right_voxel = sample_batch["right_voxel"]
-            pos = sample_batch["position"]
-            hrtf = sample_batch["hrtf"]
+        # 前向传播
+        output = model(imageleft, imageright, pos)
+        loss = loss_function(output, target)
+        accu_loss += loss.detach()  # detach() 防止梯度传播
 
-            mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
-
-            target = hrtf.to(device).squeeze(0)
-
-            loss = loss_function(mu, target)
-            accu_loss += loss.detach()
-
-            if rank == 0:
-                data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / step_count)
-
-    if dist.is_initialized():
-        dist.all_reduce(accu_loss, op=dist.ReduceOp.SUM)
-        accu_loss = accu_loss / dist.get_world_size()
-
-    final_loss = accu_loss.item() / step_count if step_count > 0 else 0.0
-    return final_loss
+        # 仅在主进程更新进度条描述
+        if rank == 0:
+            data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(
+                epoch, accu_loss.item() / (step + 1)
+            )
+    
+    # 同步所有GPU上的损失
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(accu_loss)
+        accu_loss = accu_loss / torch.distributed.get_world_size()
+ 
+    return accu_loss.item() / (step + 1)

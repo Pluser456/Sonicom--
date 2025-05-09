@@ -91,6 +91,8 @@ class TestNet(nn.Module):
 
         # 位置编码处理
         pos_feat = self.net(pos)
+        print(f"图像特征维度: {img_feat.shape}")  # 应为[batch,256]
+        print(f"位置特征维度: {pos_feat.shape}")  # 应为[batch,64]
 
         # 特征融合 
         combined = torch.cat([img_feat, pos_feat], dim=1)

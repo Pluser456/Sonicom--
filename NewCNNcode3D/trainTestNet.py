@@ -1,35 +1,28 @@
 import os
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torchvision import transforms
-from torch.utils.data import DataLoader
+import argparse
 
-from TestNet import TestNet
+import torch
+import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
+from torchvision import transforms
 from new_dataset import SonicomDataSet
+from torch.utils.data import DataLoader
+from TestNet import TestNet as create_model
 from utils import split_dataset, train_one_epoch, evaluate
 
+
 def main():
-    # 设备配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if os.path.exists("./ANP3Dweights") is False:
-        os.makedirs("./ANP3Dweights")
-
-    # 从预训练模型加载权重
-    modelpath = "./ANP3Dweights/model-300.pth"
+    
+    model = create_model().to(device)
     positions_chosen_num = 793 # 训练集每个文件选择的方位数
-    model = TestNet(target_num_anp=1, positions_num=positions_chosen_num).to(device)
-    if os.path.exists(modelpath):
-        print("Load model from", modelpath)
 
-        model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    if os.path.exists("./CNNweights") is False:
+        os.makedirs("./CNNweights")
 
-    
-    # 数据分割
+
     dataset_paths = split_dataset("Ear_voxel", "FFT_HRTF")
-    
-    # 创建数据集
+   # 创建数据集
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
@@ -51,47 +44,48 @@ def main():
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
-          # 在创建数据集后添加
-    print(f"训练集样本总数: {len(train_dataset)}")
-    print(f"测试集样本总数: {len(test_dataset)}")
+    
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=8,
-        shuffle=True,
-        collate_fn=train_dataset.collate_fn
-    )
-
-    auxiliary_loader = DataLoader(
-        train_dataset,
-        batch_size=len(train_dataset),
+        batch_size=4,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
     
+    
+
+    # auxiliary_loader = DataLoader(
+    #     train_dataset,
+    #     batch_size=len(train_dataset),
+    #     shuffle=True,
+    #     collate_fn=train_dataset.collate_fn
+    # )
+    
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=2,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-5)
+  
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
     
     # 训练循环
     num_epochs = 480*5
-    best_loss = 23.9
+    best_loss = float('inf')
     
     for epoch in range(0, num_epochs + 1):
         # 训练
         train_one_epoch(model, optimizer, train_loader, device, epoch)
         
-        if epoch % 50 == 0:
+        if epoch % 5 == 0:
             # 验证
-            train_dataset.turn_auxiliary_mode(True)
-            val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
-            train_dataset.turn_auxiliary_mode(False)
-            # # 保存最佳模型
+            # train_dataset.turn_auxiliary_mode(True)
+            val_loss = evaluate(model, test_loader, device, epoch)
+            # train_dataset.turn_auxiliary_mode(False)
+            # 保存最佳模型
             if val_loss < best_loss:
                 best_loss = val_loss
                 torch.save(model.state_dict(), "./ANP3Dweights/best_model.pth")
