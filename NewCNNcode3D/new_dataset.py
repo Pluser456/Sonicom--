@@ -8,7 +8,7 @@ class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, device, 
                  status="train",positions_chosen_num=100,
-                 calc_mean=True, 
+                 calc_mean=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:

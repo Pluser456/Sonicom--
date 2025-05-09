@@ -205,7 +205,6 @@ class ResNet3D(nn.Module):
     ) -> nn.Sequential:
         norm_layer = self._norm_layer
         downsample = None
-        previous_dilation = self.dilation
         if dilate:
             self.dilation *= stride
             stride = 1 # Replace stride with dilation
@@ -227,8 +226,7 @@ class ResNet3D(nn.Module):
                 downsample,
                 self.groups,
                 self.base_width,
-                norm_layer=norm_layer,
-                dilation=previous_dilation, # Pass dilation to the first block
+                norm_layer=norm_layer
             )
         )
         self.inplanes = planes * block.expansion # Update inplanes for the next block/layer
@@ -240,8 +238,7 @@ class ResNet3D(nn.Module):
                     planes,
                     groups=self.groups,
                     base_width=self.base_width,
-                    norm_layer=norm_layer,
-                    dilation=self.dilation, # Pass current dilation
+                    norm_layer=norm_layer
                 )
             )
 
