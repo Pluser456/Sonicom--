@@ -10,11 +10,12 @@ from utils import split_dataset, train_one_epoch, evaluate
 def main():
     # 设备配置
     current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = "model-300.pth"
+    weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
+        ear_dir = "Ear_voxel"
         isANP = True
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
@@ -25,6 +26,7 @@ def main():
         model = threeDResnetANP(target_num_anp=5, positions_num=positions_chosen_num).to(device)
     elif current_model == "3DResNet":
         weightdir = "./CNN3Dweights"
+        ear_dir = "Ear_voxel"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
@@ -38,7 +40,7 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset("Ear_voxel", "FFT_HRTF")
+    dataset_paths = split_dataset(ear_dir, "FFT_HRTF")
     
     # 创建数据集
     train_dataset = SonicomDataSet(
@@ -46,6 +48,7 @@ def main():
         dataset_paths["left_train"],
         dataset_paths["right_train"],
         positions_chosen_num=positions_chosen_num,
+        use_diff=False,
         calc_mean=True,
         mode="left"
     )
@@ -57,6 +60,7 @@ def main():
         calc_mean=False,
         status="test",
         mode="left",
+        use_diff=False,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
@@ -86,7 +90,7 @@ def main():
     
     # 训练循环
     num_epochs = 480*5
-    best_loss = 25
+    best_loss = 300
     
     patience = 10  # 早停的容忍次数
     patience_counter = 0

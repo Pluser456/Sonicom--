@@ -8,7 +8,7 @@ class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
                  status="train",positions_chosen_num=100,
-                 calc_mean=True, 
+                 calc_mean=True, use_diff = True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:
@@ -27,7 +27,7 @@ class SonicomDataSet(Dataset):
         self.positions_chosen_num = positions_chosen_num  # 训练集每个文件选择的方位数
         # self.model = model
         self.left_tensor, self.right_tensor = self._get_voxel_tensor(left_voxels, right_voxels)
-
+        self.use_diff = use_diff  # 是否使用当前HRTF和平均HRTF之间的差值作为预测目标
         # 计算HRTF均值
         if calc_mean:
             self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
@@ -79,16 +79,16 @@ class SonicomDataSet(Dataset):
         if self.mode == "left":
             hrtf_data = data["F_left"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_left[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         elif self.mode == "right":
             hrtf_data = data["F_right"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_right[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         else:  # both
             left_data = 20 * np.log10(data["F_left"][position_idx, :]) - self.log_mean_hrtf_left[position_idx, :]
             right_data = 20 * np.log10(data["F_right"][position_idx, :]) - self.log_mean_hrtf_right[position_idx, :]
-            left_hrtf = torch.tensor(left_data).type(torch.float32)
-            right_hrtf = torch.tensor(right_data).type(torch.float32)
+            left_hrtf = torch.tensor(left_data).type(torch.float32) if self.use_diff else torch.tensor(left_data).type(torch.float32)
+            right_hrtf = torch.tensor(right_data).type(torch.float32) if self.use_diff else torch.tensor(right_data).type(torch.float32)
             hrtf = torch.cat([left_hrtf, right_hrtf], dim=1)
         return hrtf
     
