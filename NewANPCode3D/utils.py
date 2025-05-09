@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-import torch.distributed as dist
 
 def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None) -> dict:
     """
@@ -91,99 +90,70 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, rank=0):
+def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
     model.anp.is_training = False # 目的是利用anp类的内部逻辑清除原来缓存的上下文点
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
     optimizer.zero_grad()
 
-    # 仅在主进程显示进度条
-    if rank == 0:
-        data_loader = tqdm(data_loader, file=sys.stdout)
-    else:
-        data_loader = data_loader
+    data_loader = tqdm(data_loader, file=sys.stdout)  # 显示进度条
 
     for step, sample_batch in enumerate(data_loader):
-        # Extract data (ensure keys match your DataLoader output)
-        left_voxel = sample_batch["left_voxel"]
-        right_voxel = sample_batch["right_voxel"]
-        pos = sample_batch["position"]
-        hrtf = sample_batch["hrtf"]
+        if model.modelname == "3DResNetANP":
+            # Extract data (ensure keys match your DataLoader output)
+            left_voxel = sample_batch["left_voxel"]
+            right_voxel = sample_batch["right_voxel"]
+            pos = sample_batch["position"]
+            hrtf = sample_batch["hrtf"]
 
-        # Model now returns prediction and target
-        mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
+            # Model now returns prediction and target
+            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
 
-        # Ensure target is on the correct device
-        target_y_sel = target_y_sel.to(device)
+            # Ensure target is on the correct device
+            target_y_sel = target_y_sel.to(device)
 
-        # Handle cases where model returns zero tensors due to insufficient points
-        if mu.shape[0] == 0:
-            print(f"Warning: Skipping step {step} in epoch {epoch} due to zero points.")
-            continue
-
-        loss = loss_function(mu, target_y_sel)
+            loss = loss_function(mu, target_y_sel)
 
         accu_loss += loss.detach()
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
-        if rank == 0:
-            data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
+        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
 
         optimizer.step()
         optimizer.zero_grad()
 
-    # Sync loss across GPUs if using distributed training
-    if dist.is_initialized():
-        dist.all_reduce(accu_loss, op=dist.ReduceOp.SUM)
-        accu_loss = accu_loss / dist.get_world_size()
-
-    num_steps = step + 1
-    final_loss = accu_loss.item() / num_steps if num_steps > 0 else 0.0
+    final_loss = accu_loss.item() / (step + 1)
 
     return final_loss
 
-def evaluate(model, data_loader, device, epoch, rank=0, auxiliary_loader=None):
+def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
     model.eval()
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
 
-    if auxiliary_loader is None:
-        raise ValueError("Auxiliary loader must be provided for evaluation")
+    auxiliary_batch = next(iter(auxiliary_loader))
 
-    try:
-        auxiliary_batch = next(iter(auxiliary_loader))
-    except StopIteration:
-        print("Error: Auxiliary loader is empty.")
-        return 0.0
+    data_loader = tqdm(data_loader, file=sys.stdout)
 
-    if rank == 0:
-        data_loader = tqdm(data_loader, file=sys.stdout)
-
-    step_count = 0
     with torch.no_grad():
         for step, sample_batch in enumerate(data_loader):
-            step_count += 1
-            left_voxel = sample_batch["left_voxel"]
-            right_voxel = sample_batch["right_voxel"]
-            pos = sample_batch["position"]
-            hrtf = sample_batch["hrtf"]
+            if model.modelname == "3DResNetANP":
+                left_voxel = sample_batch["left_voxel"]
+                right_voxel = sample_batch["right_voxel"]
+                pos = sample_batch["position"]
+                hrtf = sample_batch["hrtf"]
 
-            mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
+                mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
 
-            target = hrtf.to(device).squeeze(0)
+                target = hrtf.to(device).squeeze(0)
 
-            loss = loss_function(mu, target)
+                loss = loss_function(mu, target)
             accu_loss += loss.detach()
 
-            if rank == 0:
-                data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / step_count)
+            data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
 
-    if dist.is_initialized():
-        dist.all_reduce(accu_loss, op=dist.ReduceOp.SUM)
-        accu_loss = accu_loss / dist.get_world_size()
-
-    final_loss = accu_loss.item() / step_count if step_count > 0 else 0.0
+    final_loss = accu_loss.item() / (step + 1)
     return final_loss

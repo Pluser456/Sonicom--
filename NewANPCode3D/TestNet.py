@@ -325,6 +325,7 @@ class ANP(nn.Module):
 
 class TestNet(nn.Module):
     """完整网络，集成特征提取和ANP预测"""
+    modelname = "3DResNetANP"
     def __init__(self, target_num_anp=100,positions_num=100):
         super(TestNet, self).__init__()
         self.feature_extractor = FeatureExtractor()
@@ -340,7 +341,7 @@ class TestNet(nn.Module):
         dim_k = 256
 
         self.anp = ANP(
-            num_heads=4,
+            num_heads=8,
             output_num=output_num,
             dim_k=dim_k,
             dim_v=dim_v,
