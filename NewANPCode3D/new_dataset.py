@@ -203,16 +203,16 @@ class SingleSubjectDataSet(SonicomDataSet):
             # 获取训练集对应的均值
             if self.mode == "left":
                 mean_value = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_left"][position_idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32)
             elif self.mode == "right":
                 mean_value = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_right"][position_idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
             else:
                 mean_left = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
                 mean_right = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
                 mean_value = torch.cat([mean_left, mean_right], dim=0)
-                hrtf_left = torch.tensor(data["F_left"][position_idx, :]).reshape(1, -1).type(torch.float32)
-                hrtf_right = torch.tensor(data["F_right"][position_idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf_left = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32)
+                hrtf_right = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
 
         return {

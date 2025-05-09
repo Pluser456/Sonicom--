@@ -44,7 +44,7 @@ def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
 
     # 将所有batch的结果拼接成两个大矩阵
     final_preds = torch.cat(all_preds, dim=0)  # [total_samples, n_frequencies]
-    final_targets = torch.cat(all_targets, dim=0)  # [total_samples, n_frequencies]
+    final_targets = torch.cat(all_targets, dim=0).to(device)  # [total_samples, n_frequencies]
 
     return final_preds, final_targets
 
@@ -72,15 +72,15 @@ left_test = dataset_paths['left_test']
 train_dataset = SonicomDataSet(dataset_paths['train_hrtf_list'],
                             dataset_paths['left_train'],
                             dataset_paths['right_train'],
-                            mode="left").turn_auxiliary_mode(True)
-
+                            mode="left")
+train_dataset.turn_auxiliary_mode(True)
 auxiliary_loader = DataLoader(
     train_dataset,
     batch_size=len(train_dataset),
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
-    
+
 
 # 实例化验证数据集
 log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
@@ -110,8 +110,8 @@ for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
     print(f"LSD of HRTF {hrtfid}:", lsd)
 
 print(f"Mean LSD: {np.mean(res_list)}")
-pred_tensor = torch.stack(pred_list, dim=0)
-true_tensor = torch.stack(true_list, dim=0)
+pred_tensor = torch.cat(pred_list, dim=0)
+true_tensor = torch.cat(true_list, dim=0)
 
 freq_list = np.linspace(0, 107, 108)  # 获取频率列表
 freq_list = 48000 /256 * freq_list  # 计算频率值
