@@ -2,21 +2,37 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from TestNet import TestNet
+from TestNet import TestNet as threeDResnetANP
+from TestNet import ResNet3D as threeDResnet
 from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 
 def main():
     # 设备配置
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    weightname = "model-300.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if os.path.exists("./ANP3Dweights") is False:
-        os.makedirs("./ANP3Dweights")
+    if current_model == "3DResNetANP":
+        weightdir = "./ANP3Dweights"
+        isANP = True
+        if os.path.exists(weightdir) is False:
+            os.makedirs(weightdir)
 
-    # 从预训练模型加载权重
-    modelpath = "./ANP3Dweights/model-300.pth"
-    positions_chosen_num = 793 # 训练集每个文件选择的方位数
-    model = TestNet(target_num_anp=5, positions_num=positions_chosen_num).to(device)
+        # 从预训练模型加载权重
+        modelpath = f"{weightdir}/{weightname}"
+        positions_chosen_num = 793 # 训练集每个文件选择的方位数
+        model = threeDResnetANP(target_num_anp=5, positions_num=positions_chosen_num).to(device)
+    elif current_model == "3DResNet":
+        weightdir = "./CNN3Dweights"
+        isANP = False
+        if os.path.exists(weightdir) is False:
+            os.makedirs(weightdir)
+        modelpath = f"{weightdir}/{weightname}"
+        positions_chosen_num = 793
+        model = threeDResnet().to(device)
+
+
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
@@ -84,9 +100,9 @@ def main():
             # # 保存最佳模型
             if val_loss < best_loss:
                 best_loss = val_loss
-                torch.save(model.state_dict(), "./ANP3Dweights/best_model.pth")
+                torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
                 print(f"Saved best model with validation loss: {best_loss:.4f}")
-            torch.save(model.state_dict(), "./ANP3Dweights/model-{}.pth".format(epoch))
+            torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
             print(f"Saved model at epoch {epoch}")
 
 if __name__ == "__main__":
