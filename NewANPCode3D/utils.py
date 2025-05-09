@@ -92,7 +92,6 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
-    model.anp.is_training = False # 目的是利用anp类的内部逻辑清除原来缓存的上下文点
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
     optimizer.zero_grad()
@@ -113,6 +112,14 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             # Ensure target is on the correct device
             target_y_sel = target_y_sel.to(device)
 
+            loss = loss_function(mu, target_y_sel)
+        elif model.modelname == "3DResNet":
+            left_voxel = sample_batch["left_voxel"]
+            right_voxel = sample_batch["right_voxel"]
+            pos = sample_batch["position"]
+            hrtf = sample_batch["hrtf"]
+
+            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
 
         accu_loss += loss.detach()
@@ -151,6 +158,14 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 target = hrtf.to(device).squeeze(0)
 
                 loss = loss_function(mu, target)
+            elif model.modelname == "3DResNet":
+                left_voxel = sample_batch["left_voxel"]
+                right_voxel = sample_batch["right_voxel"]
+                pos = sample_batch["position"]
+                hrtf = sample_batch["hrtf"]
+
+                mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+                loss = loss_function(mu, target_y_sel)
             accu_loss += loss.detach()
 
             data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))

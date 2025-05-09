@@ -1,3 +1,4 @@
+import re
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -355,3 +356,53 @@ class TestNet(nn.Module):
 
     def forward(self, left_voxel, right_voxel, pos, hrtf, device, is_training=True, auxiliary_data=None):
         return self.anp(self.feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training, auxiliary_data)
+    
+class ResNet3D(nn.Module):
+    """完整网络，集成特征提取和ANP预测"""
+    modelname = "3DResNet"
+    def __init__(self):
+        super(ResNet3D, self).__init__()
+        img_feature_dim = 256
+        pos_dim = 3
+        self.feature_extractor = FeatureExtractor()
+        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256,108])
+
+    def forward(self, left_voxel, right_voxel, pos, hrtf, device):
+        max_chunk_batch_size = 40  # 设置最大批次大小限制
+        if left_voxel.shape[0] > max_chunk_batch_size:
+            voxel_feature_chunks = []
+            # 将左右体素数据按max_chunk_batch_size分割成小批次
+            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
+            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
+
+            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
+                # 对每个小批次提取特征
+                lv_chunk = lv_chunk.to(device)
+                rv_chunk = rv_chunk.to(device)
+                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
+                voxel_feature_chunks.append(vf_chunk)
+            
+            # 合并所有小批次的特征提取结果
+            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
+        else:
+            left_voxel = left_voxel.to(device)
+            right_voxel = right_voxel.to(device)
+            # 如果批次大小未超过限制，则直接提取特征
+            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
+
+        
+        # 释放不再需要的变量
+        del left_voxel, right_voxel
+        torch.cuda.empty_cache()  # 清理未使用的缓存
+        pos = pos.to(device)
+        hrtf = hrtf.to(device)
+        
+        num_positions = pos.shape[1]
+        voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
+        features = torch.cat([voxel_feature_repeated, pos], dim=2)
+        features = features.reshape(-1, features.shape[-1])
+        target = hrtf.reshape(-1, hrtf.shape[-1])
+
+        y_pred = self.fc(features)
+        return y_pred, target
+        
