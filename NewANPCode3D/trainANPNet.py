@@ -51,9 +51,6 @@ def main():
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
-          # 在创建数据集后添加
-    print(f"训练集样本总数: {len(train_dataset)}")
-    print(f"测试集样本总数: {len(test_dataset)}")
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
