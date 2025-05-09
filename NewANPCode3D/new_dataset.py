@@ -6,7 +6,7 @@ import h5py
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
-    def __init__(self, hrtf_files, left_voxels, right_voxels, device, 
+    def __init__(self, hrtf_files, left_voxels, right_voxels, 
                  status="train",positions_chosen_num=100,
                  calc_mean=True, 
                  mode="both", provided_mean_left=None, provided_mean_right=None):
@@ -23,7 +23,6 @@ class SonicomDataSet(Dataset):
         """
         self.hrtf_files = self._validate_hrtf_files(hrtf_files)
         self.mode = mode
-        self.device = device
         self.status = status
         self.positions_chosen_num = positions_chosen_num  # 训练集每个文件选择的方位数
         # self.model = model
@@ -147,18 +146,16 @@ class SonicomDataSet(Dataset):
             "right_voxel": right_voxels,
         }
 
-class SingleSubjectFeatureDataset(SonicomDataSet):
+class SingleSubjectDataSet(SonicomDataSet):
     """单个受试者的特征数据集"""
     def __init__(
             self, 
             hrtf_files,
             left_voxels, 
             right_voxels,
-            feature_extractor,
             train_log_mean_hrtf_left,
             train_log_mean_hrtf_right,
             subject_id,
-            transform=None,
             mode="both",
     ):
         # 确保subject_id有效
@@ -176,52 +173,54 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
             hrtf_files=single_hrtf,
             left_voxels=single_left,
             right_voxels=single_right,
-            feature_extractor=feature_extractor,
-            transform=transform,
+            status="test",
             calc_mean=False,
             mode=mode,
             provided_mean_left=train_log_mean_hrtf_left,
             provided_mean_right=train_log_mean_hrtf_right
         )
 
-    def __len__(self):
-        """返回单个受试者的总方位数"""
-        return self.positions_per_subject
-
-    def __getitem__(self, idx):
+    def __getitem__(self, position_idx):
         """
         获取数据项
         Args:
-            idx (int): 方位索引
+            idx (int): 索引
         """
+        position_idx = np.arange(self.positions_per_subject)  # 测试集使用所有方位
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[0], 'r') as data:
             # 获取方位角
-            position = torch.tensor(data["theta"][:, idx].T).reshape(1, -1).type(torch.float32)
+            original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
+            position = torch.stack([
+                torch.sin(original_position_rad[:, 0]), # sin(azimuth)
+                torch.cos(original_position_rad[:, 0]), # cos(azimuth)
+                torch.sin(original_position_rad[:, 1])  # sin(elevation)
+            ], dim=1)
+
+            left_voxel = self.left_tensor[0, :, :, :]
+            right_voxel = self.right_tensor[0, :, :, :]
 
             # 获取训练集对应的均值
             if self.mode == "left":
-                mean_value = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
+                mean_value = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_left"][position_idx, :]).reshape(1, -1).type(torch.float32)
             elif self.mode == "right":
-                mean_value = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
+                mean_value = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_right"][position_idx, :]).reshape(1, -1).type(torch.float32)
             else:
-                mean_left = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
-                mean_right = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
+                mean_left = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
+                mean_right = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
                 mean_value = torch.cat([mean_left, mean_right], dim=0)
-                hrtf_left = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
-                hrtf_right = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf_left = torch.tensor(data["F_left"][position_idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf_right = torch.tensor(data["F_right"][position_idx, :]).reshape(1, -1).type(torch.float32)
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
-
-        # 获取预计算的特征
-        img_feature = self.voxel_features[0]
 
         return {
             "hrtf": hrtf,
             "meanlog": mean_value,
             "position": position,
-            "voxel_feature": img_feature
+            "left_voxel": left_voxel,
+            "right_voxel": right_voxel,
         }
     
     @staticmethod
@@ -229,12 +228,14 @@ class SingleSubjectFeatureDataset(SonicomDataSet):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        voxel_features = torch.stack([item["voxel_feature"] for item in batch])
+        left_voxel = torch.stack([item["left_voxel"] for item in batch]).unsqueeze(1)
+        right_voxel = torch.stack([item["right_voxel"] for item in batch]).unsqueeze(1)
         meanlog = torch.stack([item["meanlog"] for item in batch])
         
         return {
             "hrtf": hrtfs,
             "position": positions,
-            "voxel_feature": voxel_features,
+            "left_voxel": left_voxel,
+            "right_voxel": right_voxel,
             "meanlog": meanlog
         }
