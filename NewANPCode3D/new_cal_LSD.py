@@ -1,17 +1,38 @@
 import numpy as np
 import torch
 from utils import *
-from TestNet import TestNet as create_model
+from TestNet import TestNet as threeDResnetANP
+from TestNet import ResNet3D as threeDResnet
 import matplotlib.pyplot as plt
 import os
 from torch.utils.data import DataLoader
 from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
-# from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "ANP3Dweights/best_model.pth"
+# 设备配置
+current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+weightname = "best_model.pth"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 batch_size = 32
+use_diff = False  # 是否使用差分数据
+# 模型和训练配置
+if current_model == "3DResNetANP":
+    weightdir = "./ANP3Dweights"
+    ear_dir = "Ear_voxel"
+    isANP = True
+    model = threeDResnetANP().to(device)  # 使用之前定义的网络结构
+    model_path = f"{weightdir}/{weightname}"
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+elif current_model == "3DResNet":
+    weightdir = "./CNN3Dweights"
+    ear_dir = "Ear_voxel"
+    isANP = False
+    model = threeDResnet().to(device)
+    model_path = f"{weightdir}/{weightname}"
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
 
+print("Load model from", model_path)
 def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
     model.eval()
 
@@ -27,15 +48,20 @@ def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
             pos = batch["position"]
             targets = batch["hrtf"]
             meanloghrtf = batch["meanlog"].to(device)  # [batch]
-
+            if isANP:
             # 前向传播
-            outputs, _ = model(left_voxel, right_voxel, pos, targets, device=device, is_training=False, auxiliary_data=auxiliary_batch)
+                outputs, _ = model(left_voxel, right_voxel, pos, targets, device=device, is_training=False, auxiliary_data=auxiliary_batch)
+            else:
+                outputs, _ = model(left_voxel, right_voxel, pos, targets, device=device)
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
             # 转换到对数域 (dB)
             log_target = 20 * torch.log10(targets)
-            pred = torch.abs(outputs + meanloghrtf)
+            if use_diff:
+                pred = torch.abs(outputs + meanloghrtf)
+            else:
+                pred = torch.abs(outputs)
             log_target = torch.abs(log_target)
 
             # 将当前batch的结果添加到列表
@@ -48,14 +74,6 @@ def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
 
     return final_preds, final_targets
 
-# 模型和训练配置
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = create_model().to(device)  # 使用之前定义的网络结构
-
-# 如果需要加载预训练模型
-if os.path.exists(model_path):
-    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
-    print("Load model from", model_path)
 res_list = []
 pred_list = []
 true_list = []

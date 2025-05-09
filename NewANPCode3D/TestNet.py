@@ -199,7 +199,7 @@ class ANP(nn.Module):
         self.cached_context_y = None
         self.cached_context_r = None
 
-        self.is_training = True
+        self.is_training = False
 
     def _prepare_features_target(self, feature_extractor, left_voxel, right_voxel, pos, hrtf, device, is_training):
         """ 内部函数：准备特征和目标张量 """
