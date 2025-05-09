@@ -1,8 +1,7 @@
-import re
 import torch
 from torch import nn
-from torch.nn import functional as F
-from ResNet3D import resnet34_3d as ResNet
+from ResNet3D import resnet34_3d as resnet3d
+from ResNet import resnet34 as resnet2d
 import numpy as np
 
 
@@ -10,7 +9,7 @@ class FeatureExtractor(nn.Module):
     """图像特征提取网络"""
     def __init__(self):
         super(FeatureExtractor, self).__init__()
-        self.conv_net = ResNet()
+        self.conv_net = resnet3d()
 
         self.imgfc = nn.Sequential(
             nn.Linear(2000, 256),
@@ -50,112 +49,50 @@ class Encoder(nn.Module):
         r = self.mlp(encoder_input)
         return r
 
-class Attention(nn.Module):
-    """
-    注意力机制实现。但是调换了输入变量的维度顺序。
-    同时增加batchsize维度。
-    """
-    
-    def __init__(self):
-        """
-        初始化。
-        """
-        super(Attention, self).__init__()
-    
-    def forward(self, query, key, value):
-        '''
-        前向传播函数。
-        
-        参数:
-            query: 查询向量，形状为 (batch_size, query_num, dim_k)
-            key: 键向量，形状为 (batch_size, pair_num, dim_k)
-            value: 值向量，形状为 (batch_size, pair_num, dim_v)
-        '''
-        # 计算注意力权重
-        scores = torch.bmm(query, key.transpose(1, 2)) / (key.size(-1) ** 0.5)
-        attn_weights = torch.softmax(scores, dim=-1)
-        return torch.bmm(attn_weights, value)
-
-class MultiHeadAttention(nn.Module):
-    """
-    多头注意力机制实现。采用并行计算的方式。
-    """
-    
-    def __init__(self, num_heads, output_num, dim_k, dim_v):
-        """
-        初始化多头注意力机制。
-        
-        参数:
-            num_heads: 注意力头数量
-            output_num: 输出维度
-        """
-        super(MultiHeadAttention, self).__init__()
-        self.num_heads = num_heads
-        self.output_num = output_num
-        self.attention = Attention()
-        self.hidden_dim = output_num // num_heads
-        self.dim_k = dim_k
-        self.dim_v = dim_v
-        self.Wq = nn.Linear(self.dim_k, self.output_num, bias=False)
-        self.Wk = nn.Linear(self.dim_k, self.output_num, bias=False)    
-        self.Wv = nn.Linear(self.dim_v, self.output_num, bias=False)
-        self.Wo = nn.Linear(self.output_num, self.output_num, bias=False)
-        
-    def qkv_transpose(self, X, hidden_dim):
-        '''
-        通过将输入X的维度进行变换，来实现并行计算多头注意力机制。       
-
-        输入:
-            X: 输入张量，形状为 (batch_size, any_num, num_heads * hidden_dim) 
-        输出:
-            X: 变换后的张量，形状为 (batch_size*num_heads, any_num, hidden_dim)
-        '''
-        X = X.reshape(X.size(0), X.size(1), self.num_heads, hidden_dim)  # (batch_size, any_num, num_heads, hidden_dim)
-        X = X.transpose(1, 2)  # (batch_size, num_heads, any_num, hidden_dim)
-        X = X.reshape(-1, X.size(2), hidden_dim)
-        # (batch_size*num_heads, any_num, hidden_dim)
-        return X
-    def qkv_itranspose(self, X, hidden_dim):
-        '''
-        通过将输入X的维度进行变换，来实现并行计算多头注意力机制。   
-        输入:
-            X: 输入张量，形状为 (batch_size*num_heads, any_num, hidden_dim) 
-        输出:
-            X: 变换后的张量，形状为 (batch_size, any_num, num_heads * hidden_dim)
-        '''
-        X = X.reshape(-1, self.num_heads, X.size(1), hidden_dim)  # (batch_size, num_heads, any_num, hidden_dim)
-        X = X.transpose(1, 2)  # (batch_size, any_num, num_heads, hidden_dim)
-        X = X.reshape(X.size(0), X.size(1), -1)  # (batch_size, any_num, num_heads * hidden_dim)
-        return X
-
-    def forward(self, query, key, value):
-        '''        
-        参数:
-            query: 查询向量，形状为 (batch_size, query_num, dim_k)
-            key: 键向量，形状为 (batch_size, pair_num, dim_k)
-            value: 值向量，形状为 (batch_size, pair_num, dim_v)
-        '''
-        query = self.qkv_transpose(self.Wq(query), self.hidden_dim)
-        key = self.qkv_transpose(self.Wk(key), self.hidden_dim)
-        value = self.qkv_transpose(self.Wv(value), self.hidden_dim)
-        output = self.attention(query, key, value)
-        output = self.qkv_itranspose(output, self.hidden_dim)
-        return output
-    
-
 class AttentionAggregator(nn.Module):
     def __init__(self, num_heads, output_num, dim_k, dim_v, dim_x):
+        """
+        初始化注意力聚合器。
+        参数:
+            num_heads: 注意力头的数量
+            output_num: 注意力机制的输出维度 (也是 nn.MultiheadAttention 的 embed_dim)
+            dim_k: 经过 MLP 处理后的 query 和 key 的维度 (也是 nn.MultiheadAttention 的 kdim)
+            dim_v: 输入 value (即 context_r) 的维度 (也是 nn.MultiheadAttention 的 vdim)
+            dim_x: 输入到 MLP 以生成 query 和 key 的特征维度
+        """
         super(AttentionAggregator, self).__init__()
-        self.attention = MultiHeadAttention(num_heads, output_num, dim_k, dim_v)
         self.mlp_key = batch_mlp(dim_x, [dim_k, dim_k])
         self.mlp_query = batch_mlp(dim_x, [dim_k, dim_k])
         
-    def forward(self, query, key, value):
-        # 这里query是target_x，key是上下文context_x，value是上下文特征r
-        # value: (batch_size, context_num, dim_r)
-        query = self.mlp_query(query) # (batch_size, target_num, dim_k)
-        key = self.mlp_key(key) # (batch_size, context_num, dim_k)
-        attention_output = self.attention(query, key, value) # (batch_size, target_num, output_num)
+        # 使用 PyTorch 内置的多头注意力
+        self.attention = nn.MultiheadAttention(
+            embed_dim=output_num, 
+            num_heads=num_heads,
+            kdim=dim_k,
+            vdim=dim_v,
+            batch_first=True  # 重要：确保输入输出的 batch 维度在第一位
+        )
+        
+    def forward(self, target_x_features, context_x_features, context_r_features):
+        """
+        前向传播。
+        参数:
+            target_x_features: 用于生成 query 的目标点特征，形状 (batch_size, target_num, dim_x)
+            context_x_features: 用于生成 key 的上下文点特征，形状 (batch_size, context_num, dim_x)
+            context_r_features: 上下文点的表示 (value)，形状 (batch_size, context_num, dim_v)
+        """
+        # query_for_attention: (batch_size, target_num, dim_k)
+        query_for_attention = self.mlp_query(target_x_features) 
+        # key_for_attention: (batch_size, context_num, dim_k)
+        key_for_attention = self.mlp_key(context_x_features)   
+        # value_for_attention: (batch_size, context_num, dim_v)
+        value_for_attention = context_r_features              
+
+        # nn.MultiheadAttention 的输入顺序是 query, key, value
+        # 输出是 (attn_output, attn_output_weights)
+        # attn_output 形状: (batch_size, target_num, embed_dim) 
+        # (在此处 embed_dim 等于初始化时的 output_num)
+        attention_output, _ = self.attention(query_for_attention, key_for_attention, value_for_attention)
         return attention_output
 
 class Decoder(nn.Module):
@@ -406,3 +343,51 @@ class ResNet3D(nn.Module):
         y_pred = self.fc(features)
         return y_pred, target
         
+class ResNet2D(nn.Module):
+    """完整网络，集成特征提取和ANP预测"""
+    modelname = "2DResNet"
+    def __init__(self):
+        super(ResNet2D, self).__init__()
+        img_feature_dim = 256
+        pos_dim = 3
+        self.feature_extractor = FeatureExtractor()
+        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 108])
+
+    def forward(self, left_voxel, right_voxel, pos, hrtf, device):
+        max_chunk_batch_size = 40  # 设置最大批次大小限制
+        if left_voxel.shape[0] > max_chunk_batch_size:
+            voxel_feature_chunks = []
+            # 将左右体素数据按max_chunk_batch_size分割成小批次
+            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
+            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
+
+            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
+                # 对每个小批次提取特征
+                lv_chunk = lv_chunk.to(device)
+                rv_chunk = rv_chunk.to(device)
+                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
+                voxel_feature_chunks.append(vf_chunk)
+            
+            # 合并所有小批次的特征提取结果
+            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
+        else:
+            left_voxel = left_voxel.to(device)
+            right_voxel = right_voxel.to(device)
+            # 如果批次大小未超过限制，则直接提取特征
+            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
+
+        
+        # 释放不再需要的变量
+        del left_voxel, right_voxel
+        torch.cuda.empty_cache()  # 清理未使用的缓存
+        pos = pos.to(device)
+        hrtf = hrtf.to(device)
+        
+        num_positions = pos.shape[1]
+        voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
+        features = torch.cat([voxel_feature_repeated, pos], dim=2)
+        features = features.reshape(-1, features.shape[-1])
+        target = hrtf.reshape(-1, hrtf.shape[-1])
+
+        y_pred = self.fc(features)
+        return y_pred, target

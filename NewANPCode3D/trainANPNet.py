@@ -4,14 +4,16 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from TestNet import TestNet as threeDResnetANP
 from TestNet import ResNet3D as threeDResnet
+from TestNet import ResNet2D as twoDResnet
 from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    usediff = True  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
@@ -24,6 +26,7 @@ def main():
         modelpath = f"{weightdir}/{weightname}"
         positions_chosen_num = 793 # 训练集每个文件选择的方位数
         model = threeDResnetANP(target_num_anp=5, positions_num=positions_chosen_num).to(device)
+        inputform ="voxel"
     elif current_model == "3DResNet":
         weightdir = "./CNN3Dweights"
         ear_dir = "Ear_voxel"
@@ -33,6 +36,17 @@ def main():
         modelpath = f"{weightdir}/{weightname}"
         positions_chosen_num = 793
         model = threeDResnet().to(device)
+        inputform = "voxel"
+    elif current_model == "2DResNet":
+        weightdir = "./CNNweights"
+        ear_dir = "Ear_image_gray"
+        isANP = False
+        if os.path.exists(weightdir) is False:
+            os.makedirs(weightdir)
+        modelpath = f"{weightdir}/{weightname}"
+        positions_chosen_num = 793
+        model = twoDResnet().to(device)
+        inputform = "image"
 
 
     if os.path.exists(modelpath):
@@ -40,7 +54,7 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF")
+    dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
     
     # 创建数据集
     train_dataset = SonicomDataSet(
@@ -48,8 +62,9 @@ def main():
         dataset_paths["left_train"],
         dataset_paths["right_train"],
         positions_chosen_num=positions_chosen_num,
-        use_diff=False,
+        use_diff=usediff,
         calc_mean=True,
+        inputform=inputform,
         mode="left"
     )
     
@@ -59,8 +74,9 @@ def main():
         dataset_paths["right_test"],
         calc_mean=False,
         status="test",
+        inputform=inputform,
         mode="left",
-        use_diff=False,
+        use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
