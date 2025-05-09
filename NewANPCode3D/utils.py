@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 
-def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None) -> dict:
+def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None, inputform="voxel") -> dict:
     """
     将数据集分割为训练集和测试集
     
@@ -33,9 +33,12 @@ def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None) -> d
     voxel_list.sort(key=lambda x: int(x.split('.')[0].split('_')[0][1:]))
     
     # 分离左右耳体素
-    left_voxel_list = [vox for vox in voxel_list if vox.endswith('left.npy')]
-    right_voxel_list = [vox for vox in voxel_list if vox.endswith('right.npy')]
-    
+    if inputform == "voxel":
+        left_voxel_list = [vox for vox in voxel_list if vox.endswith('left.npy')]
+        right_voxel_list = [vox for vox in voxel_list if vox.endswith('right.npy')]
+    elif inputform == "image":
+        left_voxel_list = [vox for vox in voxel_list if vox.endswith('left.png')]
+        right_voxel_list = [vox for vox in voxel_list if vox.endswith('right.png')]
     # 分割训练集和测试集
     left_train = [x for i, x in enumerate(left_voxel_list) if i not in test_indices]
     right_train = [x for i, x in enumerate(right_voxel_list) if i not in test_indices]
@@ -121,6 +124,14 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
             mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
+        elif model.modelname == "2DResNet":
+            left_voxel = sample_batch["left_voxel"]
+            right_voxel = sample_batch["right_voxel"]
+            pos = sample_batch["position"]
+            hrtf = sample_batch["hrtf"]
+
+            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+            loss = loss_function(mu, target_y_sel)
 
         accu_loss += loss.detach()
 
@@ -159,6 +170,15 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
 
                 loss = loss_function(mu, target)
             elif model.modelname == "3DResNet":
+                left_voxel = sample_batch["left_voxel"]
+                right_voxel = sample_batch["right_voxel"]
+                pos = sample_batch["position"]
+                hrtf = sample_batch["hrtf"]
+
+                mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+                loss = loss_function(mu, target_y_sel)
+
+            elif model.modelname == "2DResNet":
                 left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
                 pos = sample_batch["position"]

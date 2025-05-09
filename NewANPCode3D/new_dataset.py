@@ -2,13 +2,15 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from utils import calculate_hrtf_mean
+from PIL import Image
+from torchvision import transforms
 import h5py
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
-                 status="train",positions_chosen_num=100,
-                 calc_mean=True, use_diff = True,
+                 status="train", positions_chosen_num=100,
+                 calc_mean=True, use_diff=True, inputform="voxel",
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:
@@ -26,7 +28,14 @@ class SonicomDataSet(Dataset):
         self.status = status
         self.positions_chosen_num = positions_chosen_num  # 训练集每个文件选择的方位数
         # self.model = model
-        self.left_tensor, self.right_tensor = self._get_voxel_tensor(left_voxels, right_voxels)
+        if inputform == "image":
+            self.transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5], std=[0.5])
+            ])
+            self.left_tensor, self.right_tensor = self._get_image_tensor(left_voxels, right_voxels)
+        elif inputform == "voxel":
+            self.left_tensor, self.right_tensor = self._get_voxel_tensor(left_voxels, right_voxels)
         self.use_diff = use_diff  # 是否使用当前HRTF和平均HRTF之间的差值作为预测目标
         # 计算HRTF均值
         if calc_mean:
@@ -104,6 +113,21 @@ class SonicomDataSet(Dataset):
             right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0)
             left_tensors.append(left_voxel_tensor)
             right_tensors.append(right_voxel_tensor)
+        left_tensors = torch.cat(left_tensors, dim=0)
+        right_tensors = torch.cat(right_tensors, dim=0)
+        return left_tensors, right_tensors
+    
+    def _get_image_tensor(self, left_image_path, right_image_path):
+        """获取图像张量"""
+        left_tensors = []
+        right_tensors = []
+        for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
+            left_image = Image.open(left_path).convert('L')
+            right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
+            left_image_tensor = self.transform(left_image).unsqueeze(0)
+            right_image_tensor = self.transform(right_image).unsqueeze(0)
+            left_tensors.append(left_image_tensor)
+            right_tensors.append(right_image_tensor)
         left_tensors = torch.cat(left_tensors, dim=0)
         right_tensors = torch.cat(right_tensors, dim=0)
         return left_tensors, right_tensors
