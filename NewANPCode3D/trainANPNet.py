@@ -1,10 +1,7 @@
 import os
 import torch
-import torch.nn as nn
 import torch.optim as optim
-from torchvision import transforms
 from torch.utils.data import DataLoader
-
 from TestNet import TestNet
 from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
@@ -19,12 +16,10 @@ def main():
     # 从预训练模型加载权重
     modelpath = "./ANP3Dweights/model-300.pth"
     positions_chosen_num = 793 # 训练集每个文件选择的方位数
-    model = TestNet(target_num_anp=1, positions_num=positions_chosen_num).to(device)
+    model = TestNet(target_num_anp=5, positions_num=positions_chosen_num).to(device)
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
-
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-
     
     # 数据分割
     dataset_paths = split_dataset("Ear_voxel", "FFT_HRTF")
@@ -34,7 +29,6 @@ def main():
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        device=device,
         positions_chosen_num=positions_chosen_num,
         calc_mean=True,
         mode="left"
@@ -44,7 +38,6 @@ def main():
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
-        device=device,
         calc_mean=False,
         status="test",
         mode="left",
