@@ -81,27 +81,41 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.Adam(model.parameters(), lr=0.0005, weight_decay=1e-5)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
     # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
     
     # 训练循环
     num_epochs = 480*5
-    best_loss = 23.9
+    best_loss = 25
     
+    patience = 10  # 早停的容忍次数
+    patience_counter = 0
+
     for epoch in range(0, num_epochs + 1):
         # 训练
         train_one_epoch(model, optimizer, train_loader, device, epoch)
-        
+
+        # 验证
+        train_dataset.turn_auxiliary_mode(True)
+        val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
+        train_dataset.turn_auxiliary_mode(False)
+
+        # 检查是否是最佳模型
+        if val_loss < best_loss:
+            best_loss = val_loss
+            patience_counter = 0  # 重置早停计数器
+            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            print(f"Saved best model with validation loss: {best_loss:.4f}")
+        else:
+            patience_counter += 1
+
+        # 检查早停条件
+        if patience_counter >= patience:
+            print(f"Early stopping triggered after {epoch} epochs with best validation loss: {best_loss:.4f}")
+            break
+
+        # 保存当前模型
         if epoch % 50 == 0:
-            # 验证
-            train_dataset.turn_auxiliary_mode(True)
-            val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
-            train_dataset.turn_auxiliary_mode(False)
-            # # 保存最佳模型
-            if val_loss < best_loss:
-                best_loss = val_loss
-                torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-                print(f"Saved best model with validation loss: {best_loss:.4f}")
             torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
             print(f"Saved model at epoch {epoch}")
 
