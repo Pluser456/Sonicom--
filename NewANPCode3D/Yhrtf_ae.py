@@ -112,7 +112,7 @@ class HrtfTransformerEncoder(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
         
         # Linear layer to map the aggregated output of Transformer to latent_feature_dim
-        self.output_fc = nn.Linear(self.d_model, latent_feature_dim)
+        self.output_fc = nn.Linear(self.d_model*2, latent_feature_dim)
 
     def forward(self, hrtf: torch.Tensor) -> torch.Tensor:
         """
