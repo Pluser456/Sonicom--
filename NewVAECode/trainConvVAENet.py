@@ -57,7 +57,6 @@ def main(args):
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        device=device,
         transform=data_transform,
         calc_mean=True,
         mode="left"
@@ -67,7 +66,6 @@ def main(args):
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
-        device=device,
         transform=data_transform,
         calc_mean=False,
         status="test",

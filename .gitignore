@@ -10,3 +10,5 @@ runs/
 .idea/
 *.png
 *.pyc
+*.yaml
+*.ckpt
