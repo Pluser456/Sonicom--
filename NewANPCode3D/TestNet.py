@@ -27,6 +27,26 @@ class FeatureExtractor(nn.Module):
         img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
         return self.imgfc(img_feat)  # [batch, 256]
 
+class FeatureExtractor2D(nn.Module):
+    """图像特征提取网络"""
+    def __init__(self):
+        super(FeatureExtractor2D, self).__init__()
+        self.conv_net = resnet2d()
+
+        self.imgfc = nn.Sequential(
+            nn.Linear(2000, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+        )
+    def forward(self, voxel_left, voxel_right):
+        # 分别提取左、右耳特征
+        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
+        img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
+
+        # 拼接图像特征
+        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
+        return self.imgfc(img_feat)  # [batch, 256]
+
 
 def batch_mlp(input_dim, hidden_sizes):
     """创建一个多层感知机，且最后一层不使用激活函数"""
@@ -350,7 +370,7 @@ class ResNet2D(nn.Module):
         super(ResNet2D, self).__init__()
         img_feature_dim = 256
         pos_dim = 3
-        self.feature_extractor = FeatureExtractor()
+        self.feature_extractor = FeatureExtractor2D()
         self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 108])
 
     def forward(self, left_voxel, right_voxel, pos, hrtf, device):
