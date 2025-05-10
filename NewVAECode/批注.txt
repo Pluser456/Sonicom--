@@ -16,3 +16,15 @@ python NewVAECode/ear_to_prtf.py NewVAECode/configs/edges_median.json NewVAECode
 'vae_incept': InceptionVAECfg，基于Inception的VAE深度神经网络
 Inception网络通过使用不同大小的卷积核和最大池化层的组合，能够同时捕捉不同尺度的特征
 目前代码的cfg（见json文件）都是使用的vae_incept
+
+我的版本：
+PS C:\Users\10486\Desktop\itsadive_hybrid_structural_model-main\python> python -c "import torch; print(torch.__version__)"
+>> 
+2.3.1+cpu
+PS C:\Users\10486\Desktop\itsadive_hybrid_structural_model-main\python> python -c "import torchvision; print(torchvision.__version__)"
+>>
+>>
+0.18.1+cpu
+PS C:\Users\10486\Desktop\itsadive_hybrid_structural_model-main\python> python -c "import pytorch_lightning as pl; print(pl.__version__)"
+>>
+1.5.0
