@@ -10,7 +10,7 @@ import math # 需要导入 math 模块
 from new_dataset import SonicomDataSet
 from utils import split_dataset
 
-weightname = "model-0.pth"
+weightname = "hrtf_ae_model_epoch_100.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 usediff = False  # 是否使用差值HRTF数据
 
@@ -51,7 +51,7 @@ test_dataset = SonicomDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=32,
+    batch_size=2,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -91,7 +91,7 @@ class PositionalEncoding(nn.Module):
 # --- Transformer Encoder for HRTF ---
 class HrtfTransformerEncoder(nn.Module):
     def __init__(self, hrtf_row_width=108, num_heads=4, num_encoder_layers=3,
-                 dim_feedforward=1024, latent_feature_dim=256, dropout=0.1, 
+                 dim_feedforward=1024, latent_feature_dim=256, dropout=0.1, feature_num=2,
                  hrtf_num_rows=793): # hrtf_num_rows for PositionalEncoding max_len
         super().__init__()
         self.d_model = hrtf_row_width  # Feature dimension of each HRTF row
@@ -99,7 +99,7 @@ class HrtfTransformerEncoder(nn.Module):
         # Optional: Input projection if hrtf_row_width is not the desired d_model
         # self.input_projection = nn.Linear(hrtf_row_width, self.d_model)
         # For simplicity, we assume hrtf_row_width is d_model
-
+        self.feature_num = feature_num # 使用transformer输出的前几列作为特征输出
         self.pos_encoder = PositionalEncoding(self.d_model, dropout, max_len=hrtf_num_rows + 10) # +10 for safety margin
         
         encoder_layer = nn.TransformerEncoderLayer(
@@ -112,7 +112,7 @@ class HrtfTransformerEncoder(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
         
         # Linear layer to map the aggregated output of Transformer to latent_feature_dim
-        self.output_fc = nn.Linear(self.d_model*2, latent_feature_dim)
+        self.output_fc = nn.Linear(self.d_model*feature_num, latent_feature_dim)
 
     def forward(self, hrtf: torch.Tensor) -> torch.Tensor:
         """
@@ -131,16 +131,13 @@ class HrtfTransformerEncoder(nn.Module):
             raise ValueError(f"Unsupported HRTF input shape for Transformer: {hrtf.shape}")
         
         # x shape: (batch_size, seq_len=hrtf_num_rows, features=d_model)
-        
-        # If using input_projection:
-        # x = self.input_projection(x)
 
         x = self.pos_encoder(x)  # Add positional encoding
         
         transformer_output = self.transformer_encoder(x)  # Output shape (batch, hrtf_num_rows, d_model)
         
         # Aggregate the transformer output. Here, we take the mean across the sequence dimension.
-        aggregated_output = transformer_output[:, 0:2,:].reshape(transformer_output.shape[0], -1)  # Shape (batch, 2 * d_model)
+        aggregated_output = transformer_output[:, 0:self.feature_num, :].reshape(transformer_output.shape[0], -1)  # Shape (batch, feature_num * d_model)
         
         feature = self.output_fc(aggregated_output)  # Shape (batch, latent_feature_dim)
         
@@ -228,9 +225,9 @@ current_encoder_type = "transformer"
 # d_model (hrtf_row_width=108) 必须能被 num_heads 整除
 transformer_encoder_settings = {
     "num_heads": 6,             # 例如 2, 3, 4, 6, 9, 12 (108 % num_heads == 0)
-    "num_encoder_layers": 6,
+    "num_encoder_layers": 10,
     "dim_feedforward": 512,     # 通常是 d_model 的 2-4 倍
-    "dropout": 0.1
+    "dropout": 0.05
 }
 
 # 为解码器MLP配置
@@ -245,6 +242,10 @@ model = HRTFAutoencoder(
     decoder_mlp_hidden_dims=decoder_mlp_layers,
     encoder_transformer_config=transformer_encoder_settings if current_encoder_type == "transformer" else None
 ).to(device)
+
+if os.path.exists(modelpath):
+    print("Load model from", modelpath)
+    model.load_state_dict(torch.load(modelpath, map_location=device), strict=False)
 
 print(f"Using {model.encoder_type.upper()} Encoder. Model Name: {model.model_name}")
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
@@ -281,32 +282,29 @@ for epoch in range(num_epochs):
         optimizer.step()
         
         epoch_loss += loss.item()
-        # 更新tqdm的后缀信息
-        train_progress_bar.set_postfix(loss=loss.item())
+        train_progress_bar.desc = "[train epoch {}] loss: {:.3f} lr: {:.3e}".format(epoch + 1, epoch_loss / (i + 1), optimizer.param_groups[0]['lr'])
 
-    avg_epoch_loss = epoch_loss / len(train_loader)
-    print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_epoch_loss:.4f}")
 
     # --- 验证循环 (可选) ---
     model.eval()
     val_loss = 0
     with torch.no_grad():
-        val_progress_bar = tqdm.tqdm(test_loader, desc=f"Validation Epoch {epoch+1}/{num_epochs}", file=sys.stdout)
-        for batch in val_progress_bar:
+        val_progress_bar = tqdm.tqdm(test_loader, file=sys.stdout)
+        for step, batch in enumerate(val_progress_bar):
             hrtf = batch["hrtf"].to(device).unsqueeze(1)
             pos = batch["position"].to(device)
             
             reconstructed_hrtf, _ = model(hrtf, pos)
             loss = loss_function(reconstructed_hrtf, hrtf)
             val_loss += loss.item()
-            val_progress_bar.set_postfix(loss=loss.item())
+            # val_progress_bar.set_postfix(loss=loss.item())
+            val_progress_bar.desc = "[valid epoch {}] loss: {:.3f}".format(epoch + 1, val_loss / (step + 1))
             
-    avg_val_loss = val_loss / len(test_loader)
-    print(f"Validation Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_val_loss:.4f}")
+    
     scheduler.step()  # 更新学习率
     # 保存模型
     if (epoch + 1) % 10 == 0: # 每10个epoch保存一次
-        torch.save(model.state_dict(), f"{weightdir}/hrtf_ae_model_epoch_{epoch+1}.pth")
+        torch.save(model.state_dict(), f"{weightdir}/model-{epoch+1}.pth")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")
