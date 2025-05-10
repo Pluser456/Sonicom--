@@ -14,8 +14,8 @@ class InceptionVAECfg(pl.LightningModule):
     def __init__(self, input_size, cfg):#与VAEcfg不同处使用#做标注
         super().__init__()
         self.save_hyperparameters()
-        self.grad_freq = 1
-        self.fig_freq = 1
+        self.grad_freq = 1 #
+        self.fig_freq = 1 #
         self.kl_coeff = cfg['kl_coeff']
         latent_size = cfg['latent_size']
         use_inception = cfg['use_inception']#
