@@ -78,7 +78,7 @@ def main(args):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=18,
+        batch_size=5,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
@@ -91,11 +91,13 @@ def main(args):
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=100,
+        batch_size=10,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    
+
+    batch_example = next(iter(test_loader))
+    model.example_input_array = batch_example["left_image"]
     # 训练循环
     num_epochs = 480*5
     '''
