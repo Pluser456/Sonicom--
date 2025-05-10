@@ -12,3 +12,4 @@ runs/
 *.pyc
 *.yaml
 *.ckpt
+tb_logs/vae_5.8_model/version_17/events.out.tfevents.1746869520.XSJ-PC.15788.1
