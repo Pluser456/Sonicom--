@@ -28,3 +28,5 @@ PS C:\Users\10486\Desktop\itsadive_hybrid_structural_model-main\python> python -
 PS C:\Users\10486\Desktop\itsadive_hybrid_structural_model-main\python> python -c "import pytorch_lightning as pl; print(pl.__version__)"
 >>
 1.5.0
+
+incept的作者描述：https://qiita.com/koshian2/items/e2d05d9151f5ae9deefb
