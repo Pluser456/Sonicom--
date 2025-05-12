@@ -10,3 +10,6 @@ runs/
 .idea/
 *.png
 *.pyc
+*.yaml
+*.ckpt
+tb_logs/
