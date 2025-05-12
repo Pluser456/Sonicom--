@@ -25,8 +25,11 @@ def main(args):
     with open(args.cfg_path, 'r') as f:
         cfg = json.load(f)
     
+    # 检查 hrtf 配置
+    hrtf_config = cfg['hrtf']
+
     model = CVAECfg(
-        nfft=[cfg['hrtf']['nfft']],
+        nfft=cfg['hrtf']['nfft'],
         cfg={
             'labels': cfg['hrtf']['labels'],
             'encoder_layer_sizes': cfg['hrtf']['encoder_layer_sizes'],
@@ -77,12 +80,6 @@ def main(args):
         collate_fn=train_dataset.collate_fn
     )
     
-
-    # batch_train_test = next(iter(train_loader))
-    # print("Batch keys:", batch_train_test.keys())  
-    # print("Shape of left_image:", batch_train_test["left_image"].shape)  
-    # # 输出为: torch.Size([batch_size=4, 1, 256, 256])
-    
     test_loader = DataLoader(
         test_dataset,
         batch_size=10,
@@ -91,8 +88,9 @@ def main(args):
     )
   
     batch_example = next(iter(test_loader))
-    #left_image[10,1,256,256],pos[10,793,3],hrtf(left)[10,793,108]
-    # model.example_input_array = batch_example["left_image"]
+    #pos[10,793,3],hrtf(left)[10,793,108]
+
+
     # 训练循环
     num_epochs = 480*5
     '''
@@ -107,7 +105,7 @@ def main(args):
         model.training_epoch_end()
     '''    
     # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="vae_5.8_model")
+    logger = TensorBoardLogger("tb_logs", name="cvae_5.12_model")
 
     trainer = Trainer(
         max_epochs=num_epochs,

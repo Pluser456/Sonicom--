@@ -309,7 +309,10 @@ class SonicomDataSetHRTF(SonicomDataSet):
         
     def __getitem__(self, idx):
         batch = super().__getitem__(idx)
-        return batch["hrtf","position"]
+        return {  
+            "hrtf": batch["hrtf"],
+            "position": batch["position"]
+        }
     
     @staticmethod
     def collate_fn(batch):

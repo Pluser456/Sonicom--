@@ -18,7 +18,7 @@
     "hrtf": {
         "model_type": "cvae_dense",
         "model_ckpt_path": "NewVAECode/checkpoints/cvae_dense_median.ckpt",
-        "nfft": [108], 
+        "nfft": 108,
         "model_cfg_path": "./configs/models/cvae_dense/default.json",
         "labels": ["sin(azimuth)", "cos(azimuth)", "sin(elevation)"],  
         "encoder_layer_sizes": [128, 64, 32],  
