@@ -296,3 +296,27 @@ class SonicomDataSetLeft(SonicomDataSet):
         return {
             "left_image": left_images
         }
+    
+class SonicomDataSetHRTF(SonicomDataSet):
+    """只返回左耳HRTF和position的数据集"""
+    def __init__(self, hrtf_files, left_images, right_images,
+                 transform=None, calc_mean=True, 
+                 mode="left", provided_mean_left=None, provided_mean_right=None, status="train"):
+        super().__init__(hrtf_files, left_images, right_images,  
+                         transform=transform, calc_mean=calc_mean, 
+                         mode=mode, provided_mean_left=provided_mean_left, 
+                         provided_mean_right=provided_mean_right, status=status)
+        
+    def __getitem__(self, idx):
+        batch = super().__getitem__(idx)
+        return batch["hrtf","position"]
+    
+    @staticmethod
+    def collate_fn(batch):
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        positions = torch.stack([item["position"] for item in batch])
+        
+        return {
+            "hrtf": hrtfs,
+            "position": positions,
+        }

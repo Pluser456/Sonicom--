@@ -48,7 +48,7 @@ class Encoder(nn.Module):
         self.linear_means = nn.Linear(layer_sizes[-1], latent_size)
         self.linear_log_var = nn.Linear(layer_sizes[-1], latent_size)
 
-    def forward(self, x, c):
+    def forward(self, x, c): #cat x and c 
         #c = idx2onehot(c, n=self.num_labels)
         x = torch.cat((x, c), dim=-1)  # 拼接条件变量c（pos）到原先输入数据x（ear）上，dim=-1 表示在最后一个维度上进行拼接
         x = self.MLP(x)
@@ -71,7 +71,7 @@ class Decoder(nn.Module):
             #else:
             #    self.MLP.add_module(name='sigmoid', module=nn.Sigmoid())
 
-    def forward(self, z, c):
+    def forward(self, z, c): #cat z and c 
         #c = idx2onehot(c, n=self.num_labels)
         z = torch.cat((z, c), dim=-1)
         x = self.MLP(z)
@@ -84,10 +84,10 @@ class CVAECfg(pl.LightningModule):
 
     def __init__(self, nfft, cfg):
         super().__init__()
-        self.size_input = nfft // 2 + 1
+        self.size_input = nfft #
         self.save_hyperparameters()
-        self.grad_freq = 50
-        self.fig_freq = 50
+        self.grad_freq = 1 #
+        self.fig_freq = 1 #
         self.c_labels = cfg['labels']
         encoder_layer_sizes = [self.size_input] + cfg['encoder_layer_sizes']
         latent_size = cfg['latent_size']
@@ -200,7 +200,7 @@ class CVAECfg(pl.LightningModule):
             fig.tight_layout()
         return fig
 
-
+'''
 # TEST CODE FOR MODEL
 if __name__ == '__main__':
     import numpy as np
@@ -225,3 +225,4 @@ if __name__ == '__main__':
     print(z)
     print()
     print(resp_pred.shape)
+'''
