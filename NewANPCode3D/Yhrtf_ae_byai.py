@@ -57,7 +57,7 @@ test_dataset = SonicomDataSet(
 
 train_loader = DataLoader(
     train_dataset,
-    batch_size=16, # Adjust based on GPU memory
+    batch_size=6, # Adjust based on GPU memory
     shuffle=True,
     collate_fn=train_dataset.collate_fn,
     # num_workers=4 if device.type == 'cuda' else 0, # Use num_workers for faster loading
@@ -65,7 +65,7 @@ train_loader = DataLoader(
 )
 test_loader = DataLoader(
     test_dataset,
-    batch_size=16, # Adjust based on GPU memory
+    batch_size=6, # Adjust based on GPU memory
     shuffle=False,
     collate_fn=test_dataset.collate_fn,
     # num_workers=4 if device.type == 'cuda' else 0,
@@ -238,16 +238,16 @@ num_codebook_embeddings = 512
 commitment_cost_beta = 0.25
 
 encoder_transformer_settings = {
-    "num_heads": 4, # Divisor of encoder_d_model_config
-    "num_encoder_layers": 4, 
+    "num_heads": 9, # Divisor of encoder_d_model_config
+    "num_encoder_layers": 10, 
     "dim_feedforward": encoder_d_model_config * 4,
-    "dropout": 0.1
+    "dropout": 0.02
 }
 decoder_transformer_settings = {
-    "nhead": 4, # Divisor of encoder_d_model_config
-    "num_decoder_layers": 4,
+    "nhead": 9, # Divisor of encoder_d_model_config
+    "num_decoder_layers": 10,
     "dim_feedforward": encoder_d_model_config * 4,
-    "dropout": 0.1
+    "dropout": 0.02
 }
 pos_dim_for_each_row = 3
 hrtf_output_row_width_target = hrtf_input_row_width_original
@@ -318,8 +318,6 @@ for epoch in range(num_epochs):
     writer.add_scalar('Loss/Train/VQ_epoch', avg_vq_loss_train, epoch)
     writer.add_scalar('Loss/Train/Total_epoch', avg_total_loss_train, epoch)
     writer.add_scalar('LearningRate', optimizer.param_groups[0]['lr'], epoch)
-    
-    print(f"Epoch {epoch+1} Train Avg: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}, Total Loss: {avg_total_loss_train:.4f}")
 
     model.eval()
     val_epoch_loss_recon = 0 # <--- 重命名以区分
@@ -337,12 +335,6 @@ for epoch in range(num_epochs):
             val_epoch_loss_recon += recon_loss_val.item()
             val_epoch_loss_vq += vq_loss_val.item()
             val_epoch_total_loss += total_loss_val.item() # <--- 累加验证总损失
-
-            # <--- 添加 TensorBoard 日志 (per step for validation if desired, or remove for less verbose logging)
-            # writer.add_scalar('Loss/Validation/Reconstruction_step', recon_loss_val.item(), global_step_val)
-            # writer.add_scalar('Loss/Validation/VQ_step', vq_loss_val.item(), global_step_val)
-            # writer.add_scalar('Loss/Validation/Total_step', total_loss_val.item(), global_step_val)
-            # global_step_val += 1
             
 
             val_pbar.set_postfix_str(f"RcnL: {val_epoch_loss_recon/(step+1):.4f}, VqL: {val_epoch_loss_vq/(step+1):.4f}")

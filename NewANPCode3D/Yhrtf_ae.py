@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter # <--- 添加导入
 import tqdm
 import sys
 import math # 需要导入 math 模块
@@ -12,6 +13,7 @@ from utils import split_dataset
 
 weightname = ".pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+log_dir = "./runs/HRTF_VQVAE_TransformerDecoder_compact" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据
 
 weightdir = "./HRTFAEweights"
@@ -145,6 +147,33 @@ class HrtfTransformerEncoder(nn.Module):
 
 
 # --- HrtfDecoder (逐行MLP解码器，保持不变) ---
+class ResidualBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, use_batchnorm=True):
+        super().__init__()
+        self.use_batchnorm = use_batchnorm
+        
+        self.linear = nn.Linear(input_dim, output_dim)
+        if self.use_batchnorm:
+            self.bn = nn.BatchNorm1d(output_dim)
+        self.relu = nn.ReLU()
+        
+        if input_dim == output_dim:
+            self.shortcut = nn.Identity()
+        else:
+            # 如果维度不匹配，使用线性层进行投影以匹配残差连接
+            self.shortcut = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        
+        out = self.linear(x)
+        if self.use_batchnorm:
+            out = self.bn(out)
+        out = self.relu(out)
+        
+        out = out + residual # 添加残差
+        return out
+
 class HrtfDecoder(nn.Module):
     def __init__(self, latent_feature_dim=128, pos_dim_per_row=3, hrtf_row_output_width=108, decoder_mlp_hidden_dims=None):
         super().__init__()
@@ -154,36 +183,37 @@ class HrtfDecoder(nn.Module):
 
         mlp_layers = []
         current_dim = self.latent_feature_dim + self.pos_dim_per_row
-        num_hidden_fc_layers = len(decoder_mlp_hidden_dims)
-
-        if num_hidden_fc_layers == 0:
-            # 没有隐藏层，直接线性连接
+        
+        if decoder_mlp_hidden_dims is None or len(decoder_mlp_hidden_dims) == 0:
+            # 没有隐藏层，直接线性连接到输出
             mlp_layers.append(nn.Linear(current_dim, self.hrtf_row_output_width))
         else:
-            # 第一个隐藏层: Linear -> ReLU
+            # 第一个隐藏层: 使用 ResidualBlock (不带 BatchNorm，因为通常第一层后不加)
             first_hidden_dim = decoder_mlp_hidden_dims[0]
-            mlp_layers.append(nn.Linear(current_dim, first_hidden_dim))
-            mlp_layers.append(nn.ReLU())
+            mlp_layers.append(ResidualBlock(current_dim, first_hidden_dim, use_batchnorm=False))
             current_dim = first_hidden_dim
 
-            # 后续的隐藏层 (第二个, 第三个, ...): Linear -> BatchNorm1d -> ReLU
-            for i in range(1, num_hidden_fc_layers):
+            # 后续的隐藏层: 使用 ResidualBlock (带 BatchNorm)
+            for i in range(1, len(decoder_mlp_hidden_dims)):
                 current_hidden_dim = decoder_mlp_hidden_dims[i]
-                mlp_layers.append(nn.Linear(current_dim, current_hidden_dim))
-                mlp_layers.append(nn.BatchNorm1d(current_hidden_dim)) # BatchNorm 在 Linear 之后
-                mlp_layers.append(nn.ReLU())
+                mlp_layers.append(ResidualBlock(current_dim, current_hidden_dim, use_batchnorm=True))
                 current_dim = current_hidden_dim
             
-            # MLP 的输出层
+            # MLP 的输出层 (不使用残差块，直接线性输出)
             mlp_layers.append(nn.Linear(current_dim, self.hrtf_row_output_width))
             
         self.row_decoder_mlp = nn.Sequential(*mlp_layers)
+
     def forward(self, feature, pos):
         batch_size, num_rows = feature.shape[0], pos.shape[1]
         feature_expanded = feature.unsqueeze(1).expand(-1, num_rows, -1)
         decoder_input_per_row = torch.cat([feature_expanded, pos], dim=2)
         decoder_input_flat = decoder_input_per_row.view(batch_size * num_rows, -1)
+        
+        # 注意：BatchNorm1d期望输入是 (N, C) 或 (N, C, L)，这里是 (N, C)
+        # 如果Sequential中包含BatchNorm1d，输入必须是2D的
         decoded_rows_flat = self.row_decoder_mlp(decoder_input_flat)
+        
         reconstructed_hrtf_rows = decoded_rows_flat.view(batch_size, num_rows, self.hrtf_row_output_width)
         reconstructed_hrtf = reconstructed_hrtf_rows.unsqueeze(1)
         return reconstructed_hrtf
@@ -212,6 +242,7 @@ class HRTFAutoencoder(nn.Module):
             dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512), # Default 512
             latent_feature_dim=latent_feature_dim,
             dropout=encoder_transformer_config.get("dropout", 0.1), # Default 0.1 dropout
+            feature_num=3,
             hrtf_num_rows=self.hrtf_num_rows
         )
         self.model_name = "HRTF_AE_TransformerEncoder_RowWiseDecoder"
@@ -248,7 +279,7 @@ transformer_encoder_settings = {
 }
 
 # 为解码器MLP配置
-decoder_mlp_layers = [512, 256, 256, 256, 256] # 可根据需要调整
+decoder_mlp_layers = [256, 256, 256, 256, 256, 128] # 可根据需要调整
 
 model = HRTFAutoencoder(
     latent_feature_dim=latent_dim,
@@ -268,11 +299,11 @@ print(f"Using {model.encoder_type.upper()} Encoder. Model Name: {model.model_nam
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 # print(model) # 取消注释以查看详细模型结构
 
-optimizer = optim.AdamW(model.parameters(), lr=1e-4, weight_decay=1e-5)
+optimizer = optim.NAdam(model.parameters(), lr=2e-4, weight_decay=1e-5)
 loss_function = nn.MSELoss()
 num_epochs = 500 # 示例 epoch 数
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=0)
-
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, min_lr=1e-6)
+writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_latdim_{str(latent_dim)}_encoder_{current_encoder_type}_decoder_{str(decoder_mlp_layers)}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 
 for epoch in range(num_epochs):
@@ -301,7 +332,7 @@ for epoch in range(num_epochs):
         epoch_loss += loss.item()
         train_progress_bar.desc = "[train epoch {}] loss: {:.3f} lr: {:.3e}".format(epoch + 1, epoch_loss / (i + 1), optimizer.param_groups[0]['lr'])
 
-
+    writer.add_scalar('train_loss', epoch_loss / len(train_loader), epoch) # 记录训练损失
     # --- 验证循环 (可选) ---
     model.eval()
     val_loss = 0
@@ -317,7 +348,7 @@ for epoch in range(num_epochs):
             # val_progress_bar.set_postfix(loss=loss.item())
             val_progress_bar.desc = "[valid epoch {}] loss: {:.3f}".format(epoch + 1, val_loss / (step + 1))
             
-    
+    writer.add_scalar('val_loss', val_loss / len(test_loader), epoch) # 记录验证损失
     scheduler.step()  # 更新学习率
     # 保存模型
     if (epoch + 1) % 100 == 0: # 每100个epoch保存一次
@@ -325,3 +356,4 @@ for epoch in range(num_epochs):
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")
+writer.close() # <--- 关闭 writer
