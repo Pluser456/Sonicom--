@@ -369,11 +369,11 @@ class ResNet2D(nn.Module):
     def __init__(self):
         super(ResNet2D, self).__init__()
         img_feature_dim = 256
-        pos_dim = 3
+        # pos_dim = 3
         self.feature_extractor = FeatureExtractor2D()
-        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 108])
+        self.fc = batch_mlp(img_feature_dim, [512, 256])
 
-    def forward(self, left_voxel, right_voxel, pos, hrtf, device):
+    def forward(self, left_voxel, right_voxel, feature, device):
         max_chunk_batch_size = 40  # 设置最大批次大小限制
         if left_voxel.shape[0] > max_chunk_batch_size:
             voxel_feature_chunks = []
@@ -400,14 +400,8 @@ class ResNet2D(nn.Module):
         # 释放不再需要的变量
         del left_voxel, right_voxel
         torch.cuda.empty_cache()  # 清理未使用的缓存
-        pos = pos.to(device)
-        hrtf = hrtf.to(device)
-        
-        num_positions = pos.shape[1]
-        voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
-        features = torch.cat([voxel_feature_repeated, pos], dim=2)
-        features = features.reshape(-1, features.shape[-1])
-        target = hrtf.reshape(-1, hrtf.shape[-1])
 
-        y_pred = self.fc(features)
+        feature = feature.to(device)
+        target = feature
+        y_pred = self.fc(voxel_feature)
         return y_pred, target

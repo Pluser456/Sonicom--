@@ -107,8 +107,9 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             # Extract data (ensure keys match your DataLoader output)
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
-            pos = sample_batch["position"]
-            hrtf = sample_batch["hrtf"]
+            # pos = sample_batch["position"]
+            # hrtf = sample_batch["hrtf"]
+            feature = sample_batch["feature"]
 
             # Model now returns prediction and target
             mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=True, auxiliary_data=None)
@@ -129,9 +130,11 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
             pos = sample_batch["position"]
-            hrtf = sample_batch["hrtf"]
+            # hrtf = sample_batch["hrtf"]
+            feature = sample_batch["feature"]
 
-            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+
+            mu, target_y_sel = model(left_voxel, right_voxel, feature, device=device)
             loss = loss_function(mu, target_y_sel)
 
         accu_loss += loss.detach()
@@ -183,9 +186,10 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
                 pos = sample_batch["position"]
-                hrtf = sample_batch["hrtf"]
+                # hrtf = sample_batch["hrtf"]
+                feature = sample_batch["feature"]
 
-                mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+                mu, target_y_sel = model(left_voxel, right_voxel, feature, device=device)
                 loss = loss_function(mu, target_y_sel)
             accu_loss += loss.detach()
 

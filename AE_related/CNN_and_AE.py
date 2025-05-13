@@ -9,6 +9,7 @@ from new_dataset import SonicomDataSet, OnlyHRTFDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 from tqdm import tqdm
 import sys
+from tensorboard import SummaryWriter
 from AE import HRTFAutoencoder
 from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers
 
@@ -48,7 +49,7 @@ def main():
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
-        positions_chosen_num = 793
+        # positions_chosen_num = 793
         model = twoDResnet().to(device)
         inputform = "image"
 
@@ -60,23 +61,24 @@ def main():
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
     
-    hrtf_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], 
-                                    use_diff=usediff,
-                                    calc_mean=True,
-                                    status="test",
-                                    mode="left")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=True, status="test",mode="left")
+
 
     # 创建数据集
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        positions_chosen_num=positions_chosen_num,
         use_diff=usediff,
         calc_mean=True,
         inputform=inputform,
-        mode="left"
+        mode="left",
+        provided_feature=train_feature
     )
+
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="left", 
+                                provided_mean_left=train_dataset.log_mean_hrtf_left,
+                                provided_mean_right=train_dataset.log_mean_hrtf_right)
     
     test_dataset = SonicomDataSet(
         dataset_paths["test_hrtf_list"],
@@ -88,7 +90,9 @@ def main():
         mode="left",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
-        provided_mean_right=train_dataset.log_mean_hrtf_right
+        provided_mean_right=train_dataset.log_mean_hrtf_right,
+        provided_feature=test_feature
+
     )
     # 创建数据加载器
     train_loader = DataLoader(
@@ -111,24 +115,36 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=test_dataset.collate_fn
+    )
     optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
+    # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.85) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
     best_loss = 300
     
-    patience = 10  # 早停的容忍次数
+    patience = 30  # 早停的容忍次数
     patience_counter = 0
+    log_dir = f"runs/{current_model}/"
+    writer = SummaryWriter(log_dir=f"{log_dir}")
 
     for epoch in range(0, num_epochs + 1):
         # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
+        loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
 
         # 验证
-        train_dataset.turn_auxiliary_mode(True)
         val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
-        train_dataset.turn_auxiliary_mode(False)
+        writer.add_scalar("Loss/train", loss, epoch)
+        writer.add_scalar("Loss/val", val_loss, epoch)
+        writer.add_scalar("Learning Rate", optimizer.param_groups[0]['lr'], epoch)
+        # 更新学习率调度器
+        scheduler.step() # 在每个 epoch 结束后（或验证后）调用
 
         # 检查是否是最佳模型
         if val_loss < best_loss:

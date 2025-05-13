@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from utils import calculate_hrtf_mean
-from PIL import Image
+from PIL import Image, features
 from torchvision import transforms
 import h5py
 
@@ -11,7 +11,7 @@ class SonicomDataSet(Dataset):
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
                  status="train",
                  calc_mean=True, use_diff=True, inputform="voxel",
-                 mode="both", provided_mean_left=None, provided_mean_right=None):
+                 mode="both", provided_mean_left=None, provided_mean_right=None, provided_feature=None):
         """
         Args:
             hrtf_files (list): HRTF文件路径列表
@@ -47,7 +47,8 @@ class SonicomDataSet(Dataset):
         # 获取方位数
         with h5py.File(self.hrtf_files[0], 'r') as f:
             self.positions_per_subject = f["F_left"].shape[0]
-            
+        if provided_feature is not None:
+            self.feature = provided_feature
 
     def __len__(self):
         return len(self.hrtf_files)
@@ -56,7 +57,7 @@ class SonicomDataSet(Dataset):
         # 计算文件索引和方位索引
         file_idx = idx
         if self.status == "train":
-            position_idx = sorted(np.random.choice(self.positions_per_subject, self.positions_chosen_num, replace=False))
+            position_idx = sorted(np.random.choice(self.positions_per_subject, self.positions_per_subject, replace=False))
         else:
             position_idx = np.arange(self.positions_per_subject)  # 测试集使用所有方位
 
@@ -75,11 +76,13 @@ class SonicomDataSet(Dataset):
         left_voxel = self.left_tensor[file_idx, :, :, :]
         right_voxel = self.right_tensor[file_idx, :, :, :]
 
+        feature = self.feature[file_idx, :]
         return {
             "hrtf": hrtf,
             "position": position,
             "left_voxel": left_voxel,
             "right_voxel": right_voxel,
+            "feature": feature,
         }
         
     def _get_hrtf(self, data, position_idx):
@@ -153,12 +156,14 @@ class SonicomDataSet(Dataset):
         positions = torch.stack([item["position"] for item in batch])
         left_voxels = torch.stack([item["left_voxel"] for item in batch]) # [B, 1, D, H, W]
         right_voxels = torch.stack([item["right_voxel"] for item in batch]) # [B, 1, D, H, W]
+        features = torch.stack([item["feature"] for item in batch])
         
         return {
             "hrtf": hrtfs,
             "position": positions,
             "left_voxel": left_voxels,
             "right_voxel": right_voxels,
+            "feature": features
         }
     
 class OnlyHRTFDataSet(SonicomDataSet):
