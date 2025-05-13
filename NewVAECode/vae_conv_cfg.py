@@ -95,7 +95,7 @@ class Decoder(nn.Module):
         #channels = channels + channels[-1:]
         linear_size = np.prod(conv_out_shape)
         self.conv_out_shape = conv_out_shape 
-        #print(conv_out_shape) [256,50,7]
+        #print(conv_out_shape) #[128,50,7]
         self.output_shape = output_shape
         self.linear_stack = _lin_block(latent_size, linear_size)#反线性层
         self.conv_stack = nn.Sequential()
@@ -124,8 +124,8 @@ class VAECfg(pl.LightningModule):
     def __init__(self, input_size, cfg):
         super().__init__()
         self.save_hyperparameters() #保存超参数
-        self.grad_freq = 50 #50个epoch后记录梯度
-        self.fig_freq = 10 #10个epoch后记录图
+        self.grad_freq = 1 #50个epoch后记录梯度
+        self.fig_freq = 1 #10个epoch后记录图
         self.kl_coeff = cfg['kl_coeff'] #cfg文件中kl散度的系数  
         input_shape = [cfg['input_channels']] + input_size #input_shape为
         encoder_channels = cfg['encoder_channels']
@@ -149,7 +149,7 @@ class VAECfg(pl.LightningModule):
         return self.vae(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)#学习率为1e-5
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)#学习率为1e-5
         lr_scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5624, patience=50, cooldown=25),
             'monitor': 'val_loss'
@@ -189,7 +189,7 @@ class VAECfg(pl.LightningModule):
         img = self.get_pred_ear_figure(ear_true, ear_pred, n_cols=8)
         self.logger.experiment.add_image(f'test/ears_{batch_idx:04}', img, self.current_epoch)#记录图像，batch，epoch
 
-    def training_epoch_end(self, outputs):
+    def training_epoch_end(self):
         # log gradients
         if self.current_epoch % self.grad_freq == 0: #每50个epoch记录梯度
             for name, params in self.named_parameters():
@@ -208,7 +208,7 @@ class VAECfg(pl.LightningModule):
             self.logger.experiment.add_image('Valid/ears', img, self.current_epoch)
 
     def _shared_eval(self, batch, batch_idx):#计算损失和结果
-        ear_true, labels = batch
+        ear_true = batch['hrtf']
         results = self.forward(ear_true)#计算结果
         losses = self.loss_function(ear_true, *results)#计算损失
         return results, losses
