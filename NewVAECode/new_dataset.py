@@ -59,8 +59,8 @@ class SonicomDataSet(Dataset):
 
     def __len__(self):
         if self.status == "cvae":
-            return len(self.hrtf_files)
-            #return len(self.hrtf_files)*self.positions_per_subject
+            #return len(self.hrtf_files)
+            return len(self.hrtf_files)*self.positions_per_subject
         else:
             return len(self.hrtf_files)
 

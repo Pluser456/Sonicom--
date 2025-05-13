@@ -44,11 +44,11 @@ def get_freqresp_figure(model, resps_true, resps_labels, shape=(4, 4)):
     return fig
 
 # generate and format a single plot
-def get_freqresp_plot(resp_true, resp_pred, lbl, ax, params=None, convert_db=True):
+def get_freqresp_plot(resp_true, resp_pred, lbl, ax, params=None, convert_db=False):
     # detach tensors from computational graph
     x_true = resp_true.detach().numpy() if resp_true.requires_grad else resp_true.numpy()
     x_pred = resp_pred.detach().numpy() if resp_pred.requires_grad else resp_pred.numpy()
-    title = '{subj}-{ear} ({az}, {el})'.format(**lbl)
+    #title = '{subj}-{ear} ({az}, {el})'.format(**lbl)
     if convert_db:
         ax.plot(lr.amplitude_to_db(x_true))
         ax.plot(lr.amplitude_to_db(x_pred))
@@ -60,7 +60,7 @@ def get_freqresp_plot(resp_true, resp_pred, lbl, ax, params=None, convert_db=Tru
         #ax.set_ylim([0.5, 3.5])
         text_y = 1
     ax.set_xlim([0, len(x_true)])
-    ax.set_title(title)
+    #ax.set_title(title)
     # show spectral params z
     if params:
         label_str = '\n'.join([f'{n}: {p:.3f}' for n, p in params])

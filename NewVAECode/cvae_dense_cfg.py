@@ -112,7 +112,7 @@ class CVAECfg(pl.LightningModule):
         return self.cvae(resp_true, c)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         lr_scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5624, patience=20, cooldown=25),
             'monitor': 'val_loss'
