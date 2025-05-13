@@ -10,6 +10,7 @@ import sys
 import math # 需要导入 math 模块
 from new_dataset import SonicomDataSet
 from utils import split_dataset
+from transformers import get_cosine_schedule_with_warmup
 
 weightname = ".pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -53,7 +54,7 @@ test_dataset = SonicomDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=8,
+    batch_size=12,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -61,7 +62,7 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=8,
+    batch_size=24,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
@@ -273,13 +274,13 @@ current_encoder_type = "transformer"
 # d_model (hrtf_row_width=108) 必须能被 num_heads 整除
 transformer_encoder_settings = {
     "num_heads": 6,             # 例如 2, 3, 4, 6, 9, 12 (108 % num_heads == 0)
-    "num_encoder_layers": 10,
+    "num_encoder_layers": 15,
     "dim_feedforward": 512,     # 通常是 d_model 的 2-4 倍
     "dropout": 0.05
 }
 
 # 为解码器MLP配置
-decoder_mlp_layers = [256, 256, 256, 256, 256, 128] # 可根据需要调整
+decoder_mlp_layers = [256, 256, 256, 256, 128] # 可根据需要调整
 
 model = HRTFAutoencoder(
     latent_feature_dim=latent_dim,
@@ -300,10 +301,13 @@ print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requir
 # print(model) # 取消注释以查看详细模型结构
 
 optimizer = optim.NAdam(model.parameters(), lr=2e-4, weight_decay=1e-5)
+# optimizer = optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 loss_function = nn.MSELoss()
-num_epochs = 500 # 示例 epoch 数
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, min_lr=1e-6)
-writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_latdim_{str(latent_dim)}_encoder_{current_encoder_type}_decoder_{str(decoder_mlp_layers)}") # <--- TensorBoard 日志目录
+num_epochs = 1000 # 示例 epoch 数
+# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.85, min_lr=1e-6, patience=10)
+scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=50, num_training_steps=num_epochs)
+transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
+writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_lat_d_{str(latent_dim)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 
 for epoch in range(num_epochs):
@@ -333,6 +337,7 @@ for epoch in range(num_epochs):
         train_progress_bar.desc = "[train epoch {}] loss: {:.3f} lr: {:.3e}".format(epoch + 1, epoch_loss / (i + 1), optimizer.param_groups[0]['lr'])
 
     writer.add_scalar('train_loss', epoch_loss / len(train_loader), epoch) # 记录训练损失
+    writer.add_scalar('lr', optimizer.param_groups[0]['lr'], epoch) # 记录学习率
     # --- 验证循环 (可选) ---
     model.eval()
     val_loss = 0
