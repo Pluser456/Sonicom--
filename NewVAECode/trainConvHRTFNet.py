@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from new_dataset import SonicomDataSet,SonicomDataSetConvHRTF
-from vae_incept_cfg import InceptionVAECfg as VAECfg  
+from vae_conv_cfg import VAECfg  
 from utils import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -18,7 +18,7 @@ def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     
     # 创建保存目录
-    os.makedirs("./VAEweights", exist_ok=True)
+    #os.makedirs("./VAEweights", exist_ok=True)
     tb_writer = SummaryWriter()
 
     # 加载配置文件（参考ear_to_prtf的逻辑）
@@ -27,19 +27,18 @@ def main(args):
 
     # 初始化VAE模型（核心修改点）
     model = VAECfg(
-        input_size=[cfg['Convhrtf']['img_size']],
+        input_size=cfg['Convhrtf']['img_size'],
         cfg={
             'input_channels': cfg['Convhrtf']['img_channels'],
             'encoder_channels': cfg['Convhrtf']['encoder_channels'],
             'latent_size': cfg['Convhrtf']['latent_size'],
             'decoder_channels': cfg['Convhrtf']['decoder_channels'],
             'kl_coeff': cfg['Convhrtf']['kl_coeff'],
-            'use_inception': cfg['Convhrtf']['use_inception'],
-            'repeat_per_block': cfg['Convhrtf']['repeat_per_block']
         }
     ).to(device)
-    #print(model.vae)
-    #print()
+    
+    print(model.vae)
+    print()
 
     # 数据集准备（保持原有逻辑）
     image_dir = "Ear_image_gray"

@@ -18,7 +18,7 @@ def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     
     # 创建保存目录
-    os.makedirs("./VAEweights", exist_ok=True)
+    #os.makedirs("./VAEweights", exist_ok=True)
     tb_writer = SummaryWriter()
 
     # 加载配置文件（参考ear_to_prtf的逻辑）

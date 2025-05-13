@@ -47,13 +47,14 @@ def _calc_output_shape(input_shape, model): #计算输出形状
 class ConvVAE(nn.Module):
     def __init__(self, input_shape, encoder_channels, latent_size, decoder_channels):
         super().__init__()
+        #print(input_shape) [1,793,108]
         assert len(input_shape) == 3 #检查输入形状是否为三维
         assert type(encoder_channels) == list 
         assert type(latent_size) == int
         assert type(decoder_channels) == list
         self.latent_size = latent_size #隐变量z的维度
         self.enc = Encoder(input_shape, encoder_channels, latent_size)
-        self.dec = Decoder(self.enc.conv_out_shape, decoder_channels, latent_size)
+        self.dec = Decoder(self.enc.conv_out_shape, decoder_channels, latent_size,output_shape=input_shape)
 
     def forward(self, x):
         means, log_var = self.enc(x)
@@ -89,16 +90,25 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, conv_out_shape, channels, latent_size):
+    def __init__(self, conv_out_shape, channels, latent_size,output_shape):
         super().__init__()
         #channels = channels + channels[-1:]
         linear_size = np.prod(conv_out_shape)
-        self.conv_out_shape = conv_out_shape
+        self.conv_out_shape = conv_out_shape 
+        #print(conv_out_shape) [256,50,7]
+        self.output_shape = output_shape
         self.linear_stack = _lin_block(latent_size, linear_size)#反线性层
         self.conv_stack = nn.Sequential()
         for i, (in_channels, out_channels) in enumerate(zip(channels[:-1], channels[1:])):
             self.conv_stack.add_module(name=f'block_{i}', module=_conv_block_transp(in_channels, out_channels))#添加反卷积块
         self.conv_stack.add_module(name='block_out', module=_conv_block_transp(channels[-1], 1, is_last=True))#添加最后一层的反卷积块
+        
+        conv_output_size = _calc_output_shape(conv_out_shape, self.conv_stack)
+        #print(conv_output_size) #[1, 800, 112]
+        self.crop_height = conv_output_size[1] - output_shape[1]  # 800 - 793 = 7
+        self.crop_width = conv_output_size[2] - output_shape[2] #4
+        self.conv_stack.add_module(name='crop', module=nn.Conv2d(1, 1, kernel_size=(self.crop_height + 1, self.crop_width + 1), stride=(1,1), padding=0))
+        #print(_calc_output_shape(conv_out_shape, self.conv_stack)) #[1, 793, 108]
 
     def forward(self, z):
         x = self.linear_stack(z)
