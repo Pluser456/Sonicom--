@@ -111,7 +111,7 @@ def main(args):
         model.training_epoch_end()
     '''    
     # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="vae_5.8_model")
+    logger = TensorBoardLogger("tb_logs", name="convhrtf_5.13_model")
 
     trainer = Trainer(
         max_epochs=num_epochs,

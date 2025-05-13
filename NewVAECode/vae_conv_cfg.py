@@ -189,7 +189,7 @@ class VAECfg(pl.LightningModule):
         img = self.get_pred_ear_figure(ear_true, ear_pred, n_cols=8)
         self.logger.experiment.add_image(f'test/ears_{batch_idx:04}', img, self.current_epoch)#记录图像，batch，epoch
 
-    def training_epoch_end(self):
+    def training_epoch_end(self, outputs):
         # log gradients
         if self.current_epoch % self.grad_freq == 0: #每50个epoch记录梯度
             for name, params in self.named_parameters():
