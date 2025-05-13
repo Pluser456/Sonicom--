@@ -12,7 +12,7 @@ from PIL import Image
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
-                 status="train", positions_chosen_num=100,
+                 status="train", positions_chosen_num=793,
                  transform=None, 
                  calc_mean=True, use_diff=True, inputform="image",
                  mode="both", provided_mean_left=None, provided_mean_right=None):
@@ -62,23 +62,40 @@ class SonicomDataSet(Dataset):
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
-        file_idx = idx
+
         if self.status == "train":
+            file_idx = idx
             position_idx = sorted(np.random.choice(self.positions_per_subject, self.positions_chosen_num, replace=False))
-        else:
+        elif self.status == "test":
+            file_idx = idx
             position_idx = np.arange(self.positions_per_subject)  # 测试集使用所有方位
+        elif self.status == "cvae":
+            file_idx = idx // self.positions_per_subject
+            position_idx = idx % self.positions_per_subject
+
 
         # 读取HRTF数据
         with h5py.File(self.hrtf_files[file_idx], 'r') as data:
-            # 获取HRTF
-            hrtf = self._get_hrtf(data, position_idx)
-            # 获取方位角
-            original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
-            position = torch.stack([
-                torch.sin(original_position_rad[:, 0]), # sin(azimuth)
-                torch.cos(original_position_rad[:, 0]), # cos(azimuth)
-                torch.sin(original_position_rad[:, 1])  # sin(elevation)
-            ], dim=1)
+            if self.status == "cvae":
+                # 获取HRTF
+                hrtf = self._get_hrtf(data, position_idx)
+                # 获取方位角
+                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
+                position = torch.tensor([
+                    torch.sin(original_position_rad[0]),  # sin(azimuth)
+                    torch.cos(original_position_rad[0]),  # cos(azimuth)
+                    torch.sin(original_position_rad[1])   # sin(elevation)
+                ])
+            else:
+                # 获取HRTF
+                hrtf = self._get_hrtf(data, position_idx)
+                # 获取方位角
+                original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
+                position = torch.stack([
+                    torch.sin(original_position_rad[:, 0]), # sin(azimuth)
+                    torch.cos(original_position_rad[:, 0]), # cos(azimuth)
+                    torch.sin(original_position_rad[:, 1])  # sin(elevation)
+                ], dim=1)
 
         left_voxel = self.left_tensor[file_idx, :, :, :]
         right_voxel = self.right_tensor[file_idx, :, :, :]

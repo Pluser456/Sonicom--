@@ -58,6 +58,7 @@ def main(args):
         dataset_paths["right_train"],
         transform=data_transform,
         calc_mean=True,
+        status="cvae",
         mode="left"
     )
     
@@ -67,7 +68,7 @@ def main(args):
         dataset_paths["right_test"],
         transform=data_transform,
         calc_mean=False,
-        status="test",
+        status="cvae",
         mode="left",
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
