@@ -26,5 +26,17 @@
         "latent_size": 32  
     },
     "el_range": [-90, 90, 10],
-    "az_range": [-180, 0, 180]
+    "az_range": [-180, 0, 180],
+    "Convhrtf": {
+        "model_type": "vae_incept",
+        "model_ckpt_path": "NewVAECode/checkpoints/vae_incept_edges.ckpt",
+        "img_size": [793, 108],
+        "img_channels": 1,
+        "encoder_channels": [32, 64, 128, 256],
+        "latent_size": 108,
+        "decoder_channels": [256, 128, 64, 32],
+        "kl_coeff": 1.0,  
+        "use_inception": false,  
+        "repeat_per_block": 1  
+    }
 }

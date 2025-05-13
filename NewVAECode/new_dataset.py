@@ -14,7 +14,7 @@ class SonicomDataSet(Dataset):
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
                  status="train", positions_chosen_num=793,
                  transform=None, 
-                 calc_mean=True, use_diff=True, inputform="image",
+                 calc_mean=True, use_diff=False, inputform="image",
                  mode="both", provided_mean_left=None, provided_mean_right=None):
         """
         Args:
@@ -350,4 +350,27 @@ class SonicomDataSetHRTF(SonicomDataSet):
             "sin(azimuth)": sin_azimuths,
             "cos(azimuth)": cos_azimuths,
             "sin(elevation)": sin_elevations
+        }
+    
+class SonicomDataSetConvHRTF(SonicomDataSet):
+    """只返回左耳HRTF和position的数据集"""
+    def __init__(self, hrtf_files, left_images, right_images,
+                 transform=None, calc_mean=True, 
+                 mode="left", provided_mean_left=None, provided_mean_right=None, status="train"):
+        super().__init__(hrtf_files, left_images, right_images,  
+                         transform=transform, calc_mean=calc_mean, 
+                         mode=mode, provided_mean_left=provided_mean_left, 
+                         provided_mean_right=provided_mean_right, status=status)
+        
+    def __getitem__(self, idx):
+        batch = super().__getitem__(idx)
+        return {  
+            "hrtf": batch["hrtf"].unsqueeze(0),
+        }
+    
+    @staticmethod
+    def collate_fn(batch):
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        return {
+            "hrtf": hrtfs,
         }

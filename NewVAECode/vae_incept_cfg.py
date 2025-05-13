@@ -40,7 +40,7 @@ class InceptionVAECfg(pl.LightningModule):
     def forward(self, x):
         return self.vae(x)
 
-    def on_train_epoch_end(self):#此处与VAEcfg相同
+    def train_epoch_end(self):#此处与VAEcfg相同
         # log gradients
         if self.current_epoch % self.grad_freq == 0:
             for name, params in self.named_parameters():
