@@ -110,7 +110,8 @@ class HrtfTransformerEncoder(nn.Module):
             nhead=num_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
-            batch_first=True  # Crucial: input format (batch, seq, feature)
+            batch_first=True,  # Crucial: input format (batch, seq, feature)
+            norm_first=True # 
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
         
