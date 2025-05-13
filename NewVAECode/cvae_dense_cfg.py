@@ -155,7 +155,7 @@ class CVAECfg(pl.LightningModule):
         img = figure_to_tensor(fig)
         self.logger.experiment.add_image(f'test/resp_freq_{batch_idx:04}', img, self.current_epoch)
 
-    def on_training_epoch_end(self, outputs):
+    def training_epoch_end(self, outputs):
         # log gradients
         if self.current_epoch % self.grad_freq == 0:
             for name, params in self.named_parameters():

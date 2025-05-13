@@ -117,6 +117,8 @@ def main(args):
     trainer = Trainer(
         max_epochs=num_epochs,
         logger=logger,
+        gpus=1,
+        accelerator='gpu',
         val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
     )
 
