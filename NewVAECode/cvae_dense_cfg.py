@@ -176,7 +176,9 @@ class CVAECfg(pl.LightningModule):
             self.logger.experiment.add_image('Valid/resp_freq', img, self.current_epoch)
 
     def _shared_eval(self, batch, batch_idx):
-        resp_true, labels = batch
+        resp_true = batch["hrtf"]
+        labels = {lbl: batch[lbl] for lbl in self.c_labels}
+        #print(f"Labels type: {type(labels)}, Labels: {labels}") 
         c = torch.stack([labels[lbl] for lbl in self.c_labels], dim=-1).float()
         results = self.forward(resp_true, c)
         losses = self.loss_function(resp_true, *results)
@@ -200,7 +202,7 @@ class CVAECfg(pl.LightningModule):
             fig.tight_layout()
         return fig
 
-'''
+
 # TEST CODE FOR MODEL
 if __name__ == '__main__':
     import numpy as np
@@ -219,10 +221,10 @@ if __name__ == '__main__':
     print(m.cvae.enc)
     print()
     print(m.cvae.dec)
-
-    resp_true = torch.Tensor(np.random.randn(8, nfft // 2 + 1))
-    resp_pred, means, log_var, z = m.forward(resp_true)
+    
+    resp_true = torch.Tensor(np.random.randn(8, nfft))
+    c = torch.Tensor(np.random.randn(8, 1))
+    resp_pred, means, log_var, z = m.forward(resp_true, c)
     print(z)
     print()
     print(resp_pred.shape)
-'''

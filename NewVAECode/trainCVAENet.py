@@ -13,6 +13,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 import sys
+import pandas as pd
 
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -24,9 +25,6 @@ def main(args):
     # 加载配置文件（参考ear_to_prtf的逻辑）
     with open(args.cfg_path, 'r') as f:
         cfg = json.load(f)
-    
-    # 检查 hrtf 配置
-    hrtf_config = cfg['hrtf']
 
     model = CVAECfg(
         nfft=cfg['hrtf']['nfft'],
@@ -37,6 +35,9 @@ def main(args):
             'latent_size': cfg['hrtf']['latent_size'],
         }
     ).to(device)
+    #print(f"Labels type: {type(cfg['hrtf']['labels'])}, Labels: {cfg['hrtf']['labels']}")
+    # print(model.cvae)
+    # print()
 
     # 数据集准备（保持原有逻辑）
     image_dir = "Ear_image_gray"
@@ -76,7 +77,7 @@ def main(args):
 
     train_loader = DataLoader(
         train_dataset,
-        batch_size=5,
+        batch_size=50,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
@@ -88,8 +89,13 @@ def main(args):
         collate_fn=test_dataset.collate_fn
     )
   
-    batch_example = next(iter(test_loader))
-    #pos[10,793,3],hrtf(left)[10,793,108]
+    batch_example = next(iter(test_loader))#pos[10,3],hrtf(left)[10,108]
+    resp_true = batch_example["hrtf"]
+    c = torch.cat([batch_example[lbl].unsqueeze(-1) for lbl in model.c_labels], dim=-1).float()
+    model.example_input_array = (resp_true, c)
+    labels_dict = {lbl: batch_example[lbl].cpu().numpy() for lbl in model.c_labels}
+    model.example_input_labels = pd.DataFrame(labels_dict)
+    
 
 
     # 训练循环

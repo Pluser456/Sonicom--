@@ -58,7 +58,11 @@ class SonicomDataSet(Dataset):
             
 
     def __len__(self):
-        return len(self.hrtf_files)
+        if self.status == "cvae":
+            return len(self.hrtf_files)
+            #return len(self.hrtf_files)*self.positions_per_subject
+        else:
+            return len(self.hrtf_files)
 
     def __getitem__(self, idx):
         # 计算文件索引和方位索引
@@ -326,17 +330,24 @@ class SonicomDataSetHRTF(SonicomDataSet):
         
     def __getitem__(self, idx):
         batch = super().__getitem__(idx)
+        position = batch["position"]
         return {  
             "hrtf": batch["hrtf"],
-            "position": batch["position"]
+            "sin(azimuth)": position[0],
+            "cos(azimuth)": position[1],
+            "sin(elevation)": position[2]
         }
     
     @staticmethod
     def collate_fn(batch):
         hrtfs = torch.stack([item["hrtf"] for item in batch])
-        positions = torch.stack([item["position"] for item in batch])
+        sin_azimuths = torch.stack([item["sin(azimuth)"] for item in batch])
+        cos_azimuths = torch.stack([item["cos(azimuth)"] for item in batch])
+        sin_elevations = torch.stack([item["sin(elevation)"] for item in batch])
         
         return {
             "hrtf": hrtfs,
-            "position": positions,
+            "sin(azimuth)": sin_azimuths,
+            "cos(azimuth)": cos_azimuths,
+            "sin(elevation)": sin_elevations
         }

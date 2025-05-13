@@ -22,7 +22,7 @@
         "model_cfg_path": "./configs/models/cvae_dense/default.json",
         "labels": ["sin(azimuth)", "cos(azimuth)", "sin(elevation)"],  
         "encoder_layer_sizes": [128, 64, 32],  
-        "decoder_layer_sizes": [32, 64, 128, 108],  
+        "decoder_layer_sizes": [32, 64, 128],  
         "latent_size": 32  
     },
     "el_range": [-90, 90, 10],
