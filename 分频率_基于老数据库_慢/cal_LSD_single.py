@@ -13,7 +13,7 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "D:\大学\大三下\大创项目\Sonicom--2d\weights\model-0.pth"
+model_path = "D:\大学\大三下\大创项目\Sonicom--2d\weights\model-1.pth"
 # model_path = "123"
 
 target_index = 50

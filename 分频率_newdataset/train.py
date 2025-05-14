@@ -14,8 +14,10 @@ from TestNet import TestNet as create_model
 from utils import split_dataset, train_one_epoch, evaluate
 
 target_index = 50
-def main(args):
-    global target_index
+def main(args,target_index):
+    target_index = target_index
+    print("--------------------------------")
+    print(f"target_index: {target_index}")
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(device)
 
@@ -116,26 +118,28 @@ def main(args):
 
 
         # validate
-        val_loss = evaluate(model=model,
-                                     data_loader=val_loader,
-                                     device=device,
-                                     epoch=epoch,
-                                     target_index = target_index)
+        # val_loss = evaluate(model=model,
+        #                              data_loader=val_loader,
+        #                              device=device,
+        #                              epoch=epoch,
+        #                              target_index = target_index)
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
         # tb_writer.add_scalar(tags[1], train_acc, epoch)
-        tb_writer.add_scalar(tags[2], val_loss, epoch)
+        # tb_writer.add_scalar(tags[2], val_loss, epoch)
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
+        # torch.save(model.state_dict(), "./weights/model666-{}.pth".format(epoch))
+    torch.save(model.state_dict(), "./weights/model999-freq{}.pth".format(target_index))
 
-        torch.save(model.state_dict(), "./weights/model666-{}.pth".format(epoch))
+        
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_classes', type=int, default=5)
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=3)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--lrf', type=float, default=0.01)
@@ -151,5 +155,5 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
 
     opt = parser.parse_args()
-
-    main(opt)
+    for idx in range(108):
+        main(opt, idx)
