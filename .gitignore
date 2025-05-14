@@ -7,3 +7,5 @@ NewCode/__pycache__/
 runs/
 *.code-workspace
 .idea/
+*.pyc
+Ear_voxel/
