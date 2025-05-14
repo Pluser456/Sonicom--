@@ -1,3 +1,4 @@
+# resnet模型结构不变，改为三维卷积，输入改为输入三维模型，
 import os
 import argparse
 
