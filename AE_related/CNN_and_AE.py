@@ -9,7 +9,7 @@ from new_dataset import SonicomDataSet, OnlyHRTFDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 from tqdm import tqdm
 import sys
-from tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from AE import HRTFAutoencoder
 from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers
 
@@ -123,7 +123,7 @@ def main():
     )
     optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.85) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.85) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
@@ -132,7 +132,7 @@ def main():
     patience = 30  # 早停的容忍次数
     patience_counter = 0
     log_dir = f"runs/{current_model}/"
-    writer = SummaryWriter(log_dir=f"{log_dir}")
+    writer = SummaryWriter(log_dir=f"{log_dir}/test01")
 
     for epoch in range(0, num_epochs + 1):
         # 训练

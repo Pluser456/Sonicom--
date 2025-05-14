@@ -32,12 +32,7 @@ class FeatureExtractor2D(nn.Module):
     def __init__(self):
         super(FeatureExtractor2D, self).__init__()
         self.conv_net = resnet2d()
-
-        self.imgfc = nn.Sequential(
-            nn.Linear(2000, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-        )
+        
     def forward(self, voxel_left, voxel_right):
         # 分别提取左、右耳特征
         img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
@@ -45,7 +40,7 @@ class FeatureExtractor2D(nn.Module):
 
         # 拼接图像特征
         img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
-        return self.imgfc(img_feat)  # [batch, 256]
+        return img_feat  # [batch, 256]
 
 
 def batch_mlp(input_dim, hidden_sizes):
@@ -368,10 +363,27 @@ class ResNet2D(nn.Module):
     modelname = "2DResNet"
     def __init__(self):
         super(ResNet2D, self).__init__()
-        img_feature_dim = 256
+        img_feature_dim = 2000
         # pos_dim = 3
         self.feature_extractor = FeatureExtractor2D()
-        self.fc = batch_mlp(img_feature_dim, [512, 256])
+        # 第一个隐藏层: 使用 ResidualBlock (不带 BatchNorm，因为通常第一层后不加)
+        mlp_layers = []
+        mlp_hidden_dims = [512, 256, 256, 256]
+        current_dim = img_feature_dim
+        first_hidden_dim = mlp_hidden_dims[0]
+        mlp_layers.append(ResidualBlock(current_dim, first_hidden_dim, use_batchnorm=False))
+        current_dim = first_hidden_dim
+
+        # 后续的隐藏层: 使用 ResidualBlock (带 BatchNorm)
+        for i in range(1, len(mlp_hidden_dims)):
+            current_hidden_dim = mlp_hidden_dims[i]
+            mlp_layers.append(ResidualBlock(current_dim, current_hidden_dim, use_batchnorm=True))
+            current_dim = current_hidden_dim
+        
+        # MLP 的输出层 (不使用残差块，直接线性输出)
+        mlp_layers.append(nn.Linear(current_dim, 256))
+        
+        self.fc =  nn.Sequential(*mlp_layers)
 
     def forward(self, left_voxel, right_voxel, feature, device):
         max_chunk_batch_size = 40  # 设置最大批次大小限制
@@ -405,3 +417,30 @@ class ResNet2D(nn.Module):
         target = feature
         y_pred = self.fc(voxel_feature)
         return y_pred, target
+    
+class ResidualBlock(nn.Module):
+    def __init__(self, input_dim, output_dim, use_batchnorm=True):
+        super().__init__()
+        self.use_batchnorm = use_batchnorm
+        
+        self.linear = nn.Linear(input_dim, output_dim)
+        if self.use_batchnorm:
+            self.bn = nn.BatchNorm1d(output_dim)
+        self.relu = nn.ReLU()
+        
+        if input_dim == output_dim:
+            self.shortcut = nn.Identity()
+        else:
+            # 如果维度不匹配，使用线性层进行投影以匹配残差连接
+            self.shortcut = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        residual = self.shortcut(x)
+        
+        out = self.linear(x)
+        if self.use_batchnorm:
+            out = self.bn(out)
+        out = self.relu(out)
+        
+        out = out + residual # 添加残差
+        return out
