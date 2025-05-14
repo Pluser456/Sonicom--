@@ -9,13 +9,15 @@ from torchvision import transforms
 
 # from my_dataset import MyDataSet
 from new_dataset import SonicomDataSet, SingleSubjectDataSet
-from vit_model import vit_base_patch16_224_in21k as create_model
+from TestNet import TestNet as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
 
-
+target_index = 50
 def main(args):
+    global target_index
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    print(device)
 
     if os.path.exists("./weights") is False:
         os.makedirs("./weights")
@@ -43,18 +45,20 @@ def main(args):
                                    transforms.ToTensor(),
                                    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])}'''
     data_transform = {
-        "train": transforms.Compose([
-            transforms.Resize((224, 224)),  # 直接缩放到 224x224（可能改变长宽比）
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5])
-        ]),
-        "val": transforms.Compose([  # 验证集可保持原逻辑
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5])
-        ])
+    "train": transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),  # 强制转换为单通道
+        transforms.Resize((224, 224)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])  # 单通道标准化
+    ]),
+    "val": transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),  # 强制转换为单通道
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])  # 单通道标准化
+    ])
     }
 
     # 实例化训练数据集
@@ -62,7 +66,7 @@ def main(args):
                             left_images=left_train,
                             right_images=right_train,
                             transform=data_transform["train"],
-                            mode="left")
+                            mode="left",device=device)
 
     # 实例化验证数据集
     log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
@@ -74,7 +78,8 @@ def main(args):
                             mode="left",
                             calc_mean=False,
                             provided_mean_left=log_mean_hrtf_left,
-                            provided_mean_right=log_mean_hrtf_right
+                            provided_mean_right=log_mean_hrtf_right,
+                            device=device
                             )
 
     batch_size = args.batch_size
@@ -84,59 +89,20 @@ def main(args):
                                                batch_size=batch_size*3,
                                                shuffle=True,
                                                pin_memory=True,
-                                            #    num_workers=nw,
+                                               num_workers=nw,
                                                collate_fn=train_dataset.collate_fn)
 
     val_loader = torch.utils.data.DataLoader(val_dataset,
                                              batch_size=batch_size*6,
                                              shuffle=False,
                                              pin_memory=True,
-                                            #  num_workers=nw,
+                                             num_workers=nw,
                                              collate_fn=val_dataset.collate_fn)
 
-    model = create_model(num_classes=args.num_classes, has_logits=False).to(device)
+    model = create_model().to(device)
 
-#num-classes =1000
-    if args.weights != "":
-        assert os.path.exists(args.weights), "weights file: '{}' not exist.".format(args.weights)
-        weights_dict = torch.load(args.weights, map_location=device)
-        print("weight_dict.state_dict().keys():{}".format(weights_dict.keys()))
-        # 删除不需要的权重
-        del_keys = ['head.weight', 'head.bias'] if model.has_logits \
-            else ['head.weight', 'head.bias'] # 'pre_logits.fc.weight', 'pre_logits.fc.bias',
-        for k in del_keys:
-            del weights_dict[k]
-        print(model.load_state_dict(weights_dict, strict=False))
+    optimizer = optim.AdamW(model.parameters(),lr=args.lr, weight_decay=0.05)  # 0.05
 
-    if args.freeze_layers:
-        print("Freezing layers except last two blocks, head, pre_logits, and cross_attn...")
-        # 获取最后两层的名称前缀
-        last_two_blocks = [f"blocks.{i}" for i in [-2, -1]]  # 自动适配不同深度
-        
-        for name, para in model.named_parameters():
-            # 解冻条件：属于最后两层、head、pre_logits 或 cross_attn
-            #在这里解冻!!!解冻名字参考下面代码!!!
-            if (
-                "norm.weight" in name 
-                or "norm.bias" in name 
-                or "blocks.11" in name 
-                or "blocks.10" in name 
-                or "blocks.9" in name
-                or "blocks.8" in name
-                or "head" in name 
-                or "pre_logits" in name 
-                or "pos_proj" in name 
-                or "cross_attn" in name  # 新增：解冻交叉注意力层
-            ):
-                para.requires_grad_(True)
-                print(f"Training: {name}")
-            else:
-                para.requires_grad_(False)
-    for name, param in model.named_parameters():#print判断冻结情况
-        print(f"Layer: {name:30} | Requires Grad: {param.requires_grad}")
-    pg = [p for p in model.parameters() if p.requires_grad]
-    optimizer = optim.AdamW(pg, lr=args.lr, weight_decay=0.05)  # 0.05
-    # Scheduler https://arxiv.org/pdf/1812.01187.pdf (改成adamw)
 
 
     for epoch in range(args.epochs):
@@ -145,23 +111,25 @@ def main(args):
                                                 optimizer=optimizer,
                                                 data_loader=train_loader,
                                                 device=device,
-                                                epoch=epoch)
+                                                epoch=epoch,
+                                                target_index = target_index)
 
 
         # validate
-        # val_loss = evaluate(model=model,
-        #                              data_loader=val_loader,
-        #                              device=device,
-        #                              epoch=epoch)
+        val_loss = evaluate(model=model,
+                                     data_loader=val_loader,
+                                     device=device,
+                                     epoch=epoch,
+                                     target_index = target_index)
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
         # tb_writer.add_scalar(tags[1], train_acc, epoch)
-        # tb_writer.add_scalar(tags[2], val_loss, epoch)
+        tb_writer.add_scalar(tags[2], val_loss, epoch)
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
 
-        torch.save(model.state_dict(), "./weights/model-{}.pth".format(epoch))
+        torch.save(model.state_dict(), "./weights/model666-{}.pth".format(epoch))
 
 
 if __name__ == '__main__':

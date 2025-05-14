@@ -26,8 +26,7 @@ def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> d
     image_dir = os.path.join(parent_dir, image_dir)
     hrtf_dir = os.path.join(parent_dir, hrtf_dir)
     if test_indices is None:
-        # test_indices = [7, 14, 27, 30, 31, 52, 54, 55, 70, 82, 143, 184]
-        test_indices = [i for i in range(201) if i != 0]
+        test_indices = [7, 14, 27, 30, 31, 52, 54, 55, 70, 82, 143, 184]
         # print(sorted(np.random.choice(190, size=12, replace=False)))
     
     # 获取并排序图像列表
@@ -96,25 +95,33 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index = 50):
     model.train()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
     optimizer.zero_grad()
  
     data_loader = tqdm(data_loader, file=sys.stdout)
+
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
+        imageright = sample_batch["right_image"].to(device)
+        
         # imageright = sample_batch["right_image"].to(device)
-        pos = sample_batch["position"].squeeze(1).to(device)
-        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        pos = sample_batch["position"].squeeze().to(device)
+        # mark
+        target = sample_batch["hrtf"].squeeze(1)[:, target_index].to(device)
+        # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        
+      
+        # [:, target_index].to(device)
 
         # 前向传播
-        #output = model(imageleft,imageright, pos)
-        output = model(imageleft,pos)
+        output = model(imageleft, imageright, pos)  # Updated to include imageright
         loss = loss_function(output, target)
         accu_loss += loss.detach() # detach() 防止梯度传播
+        
 
         # 反向传播
         loss.backward()
@@ -129,7 +136,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device, epoch):
+def evaluate(model, data_loader, device, epoch, target_index = 50):
     model.eval()
     loss_function = torch.nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)  # 累计损失
@@ -138,13 +145,16 @@ def evaluate(model, data_loader, device, epoch):
     for step, sample_batch in enumerate(data_loader):
         # 数据迁移到设备
         imageleft = sample_batch["left_image"].to(device)
-        # imageright = sample_batch["right_image"].to(device)
+        imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
-        target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        # mark
+        target = sample_batch["hrtf"].squeeze(1)[:, target_index].to(device)
+        # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
+        
 
         # 前向传播
-        #output = model(imageleft, imageright, pos)
-        output = model(imageleft, pos)
+        output = model(imageleft, imageright, pos)
+        # output = model(imageleft, pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach()  # detach() 防止梯度传播
 

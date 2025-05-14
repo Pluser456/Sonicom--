@@ -58,7 +58,7 @@ class PatchEmbed(nn.Module):
 
         self.proj = nn.Conv2d(in_c, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
-# s12
+
     def forward(self, x):
         B, C, H, W = x.shape
         assert H == self.img_size[0] and W == self.img_size[1], \
@@ -243,7 +243,12 @@ class VisionTransformer(nn.Module):
             nn.Dropout(0.1)  # 可选：保留少量正则化
         )'''
         # 修改head层（每个token独立预测）
+        # # mark 改单频率将108改为1
+        # self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(1)])
         self.heads = nn.ModuleList([nn.Linear(768, 1) for _ in range(108)])
+        # mark=== 新增全连接层 ===
+        self.final_fc = nn.Linear(108, 1)  # 输入维度108 → 输出维度1
+        
         
         # 调整位置编码映射层（将位置信息映射到与图像特征相同维度）
         self.pos_proj = nn.Linear(2, embed_dim)  # 输入维度是位置信息的2，输出768
@@ -331,12 +336,17 @@ class VisionTransformer(nn.Module):
         # output [B, 108]
         # attn_output shape: [B, 108, 768]'''
         outputs = []
+        # mark
+        # for i in range(1):
         for i in range(108):
             # 对每个位置应用对应的线性层
             out = self.heads[i](attn_output[:, i, :])  # [B, 1]
             outputs.append(out)
         output = torch.stack(outputs, dim=1)  # [B, 108, 1]
         output = output.squeeze(-1)       # [B, 108]
+        
+        # mark 新增全连接层
+        output = self.final_fc(output)  # [B, 108] → [B, 1]
 
         return output
 
