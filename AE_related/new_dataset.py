@@ -47,8 +47,8 @@ class SonicomDataSet(Dataset):
         # 获取方位数
         with h5py.File(self.hrtf_files[0], 'r') as f:
             self.positions_per_subject = f["F_left"].shape[0]
-        if provided_feature is not None:
-            self.feature = provided_feature
+        
+        self.feature = provided_feature
 
     def __len__(self):
         return len(self.hrtf_files)
@@ -76,7 +76,7 @@ class SonicomDataSet(Dataset):
         left_voxel = self.left_tensor[file_idx, :, :, :]
         right_voxel = self.right_tensor[file_idx, :, :, :]
 
-        feature = self.feature[file_idx, :]
+        feature = self.feature[file_idx, :] if self.feature is not None else None
         return {
             "hrtf": hrtf,
             "position": position,
@@ -156,7 +156,7 @@ class SonicomDataSet(Dataset):
         positions = torch.stack([item["position"] for item in batch])
         left_voxels = torch.stack([item["left_voxel"] for item in batch]) # [B, 1, D, H, W]
         right_voxels = torch.stack([item["right_voxel"] for item in batch]) # [B, 1, D, H, W]
-        features = torch.stack([item["feature"] for item in batch])
+        features = torch.stack([item["feature"] for item in batch]) if batch[0]["feature"] is not None else None
         
         return {
             "hrtf": hrtfs,
