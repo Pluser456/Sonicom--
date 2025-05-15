@@ -14,10 +14,11 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "D:\大学\大三下\大创项目\Sonicom--2d\weights\model999-freq40.pth"
+
 # model_path = "123"
 
-target_index = 40
+target_index = 65
+model_path = f"D:\大学\大三下\大创项目\Sonicom--2d\weights\model999-freq{target_index}.pth"
 
 def evaluate_one_hrtf(model, test_loader, target_index = 50):
     model.eval()
