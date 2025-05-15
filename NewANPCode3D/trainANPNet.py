@@ -9,6 +9,8 @@ from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
 from torch.utils.tensorboard import SummaryWriter
 import time
+import numpy as np
+import matplotlib.pyplot as plt
 
 def main():
     # 设备配置
@@ -132,6 +134,7 @@ def main():
             patience_counter = 0  # 重置早停计数器
             # torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
             # print(f"Saved best model with validation loss: {best_loss:.4f}")
+            visualize_hrtf(model, test_loader, device, save_path=f"{weightdir}/visualization.png")
         else:
             patience_counter += 1
 
@@ -144,6 +147,66 @@ def main():
         # if epoch % 50 == 0:
         #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
         #     print(f"Saved model at epoch {epoch}")
+
+def visualize_hrtf(model, test_loader, device, save_path, max_samples=16):
+    model.eval()
+    hrtf_true_list = []
+    hrtf_pred_list = []
+    with torch.no_grad():
+        count = 0
+        for batch in test_loader:
+            left_voxel = batch["left_voxel"]
+            right_voxel = batch["right_voxel"]
+            pos = batch["position"]
+            hrtf_true = batch["hrtf"]
+            hrtf_pred, _ = model(left_voxel, right_voxel, pos, hrtf_true, device=device)
+            # 去除多余维度
+            hrtf_true = hrtf_true.squeeze()
+            hrtf_pred = hrtf_pred.squeeze()
+            # 若数据是三维（形如 (batch, num_rows, features)），取第一个样本第一行的数据
+            if hrtf_true.ndim == 3:
+                sample_true = hrtf_true[0, 0, :].cpu().numpy()
+                sample_pred = hrtf_pred[0, 0, :].cpu().numpy()
+            # 若数据是二维（形如 (num_rows, features)），同样取第一行
+            elif hrtf_true.ndim == 2:
+                sample_true = hrtf_true[0, :].cpu().numpy()
+                sample_pred = hrtf_pred[0, :].cpu().numpy()
+            else:
+                continue
+            hrtf_true_list.append(sample_true)
+            hrtf_pred_list.append(sample_pred)
+            count += 1
+            if count >= max_samples:
+                break
+
+    if len(hrtf_true_list) == 0:
+        print("未获取到有效样本用于可视化")
+        return
+
+    # 确定网格行列数（尽量构成正方形）
+    n_samples = len(hrtf_true_list)
+    n_cols = int(np.ceil(np.sqrt(n_samples)))
+    n_rows = int(np.ceil(n_samples / n_cols))
+
+    fig, axs = plt.subplots(n_rows, n_cols, figsize=(n_cols * 4, n_rows * 3))
+    # 将 axs 展平便于遍历
+    axs = np.array(axs).reshape(-1)
+    for i in range(n_rows * n_cols):
+        ax = axs[i]
+        if i < n_samples:
+            ax.plot(hrtf_true_list[i], label="True HRTF", linewidth=2)
+            ax.plot(hrtf_pred_list[i], label="Predicted HRTF", linestyle="--", linewidth=2)
+            ax.set_title(f"Sample {i+1}", fontsize=10)
+            ax.tick_params(labelsize=8)
+            ax.legend(fontsize=8)
+        else:
+            ax.axis('off')
+
+    fig.suptitle("HRTF 对比网格", fontsize=16)
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(save_path)
+    plt.close()
+    print(f"可视化图已保存至 {save_path}")
 
 if __name__ == "__main__":
     main()
