@@ -9,14 +9,15 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 from torchvision import transforms
-from old_dataset import SonicomDataSet, SingleSubjectDataSet
+# from old_dataset import SonicomDataSet, SingleSubjectDataSet
+from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # from utils import read_split_data, train_one_epoch, evaluate
 
-model_path = "D:\大学\大三下\大创项目\Sonicom--2d\weights\model666-0.pth"
+model_path = "D:\大学\大三下\大创项目\Sonicom--2d\weights\model999-freq40.pth"
 # model_path = "123"
 
-target_index = 50
+target_index = 40
 
 def evaluate_one_hrtf(model, test_loader, target_index = 50):
     model.eval()
@@ -32,11 +33,20 @@ def evaluate_one_hrtf(model, test_loader, target_index = 50):
             imageright = batch["right_image"].to(device)
             position = batch["position"].squeeze(1).to(device) #[batch, 2]
             # mark
-            targets = batch["hrtf"].squeeze(1)[:, target_index].unsqueeze(-1).to(device)  # [batch]
-            meanloghrtf = batch["meanlog"].unsqueeze(-1)[:, target_index].to(device)  # [batch]
-            
-            # targets = batch["hrtf"].squeeze(1)[:, :].to(device)  # [batch]
-            # meanloghrtf = batch["meanlog"][:, :].to(device)  # [batch]
+
+            # targets = batch["hrtf"].squeeze(1)[:,:].unsqueeze(-1).to(device)  # [batch]
+            # meanloghrtf = batch["meanlog"].unsqueeze(-1)[:, :].to(device)  # [batch]
+            targets = batch["hrtf"]
+            targets = targets[:, :, target_index]  # 形状变为 [1, 793]
+            targets = targets.squeeze(0).unsqueeze(-1).to(device)  # 最终形状 [793, 1]
+            # targets = targets.squeeze(1)[:, : , target_index].to(device)
+            # targets = targets.reshape(-1, 1)
+            # meanloghrtf = batch["meanlog"].unsqueeze(1)[:, :,target_index].to(device)  # [batch]
+          
+            meanloghrtf = batch["meanlog"]
+            meanloghrtf = meanloghrtf[:, :, target_index]  # 形状变为 [1, 793]
+            meanloghrtf = meanloghrtf.squeeze(0).unsqueeze(-1).to(device) 
+
 
             # 前向传播
             # outputs = model(imageleft,imageright, position)  # [batch]
@@ -131,6 +141,8 @@ if __name__ == '__main__':
                             right_images=right_train,
                             transform=data_transform["train"],
                             mode="left",
+                            device=device
+                        
                             )
 
     # 实例化验证数据集
@@ -148,7 +160,9 @@ if __name__ == '__main__':
                                            mode="left",
                                            train_log_mean_hrtf_left=log_mean_hrtf_left,
                                            train_log_mean_hrtf_right=log_mean_hrtf_right,
-                                           subject_id = hrtfid
+                                           subject_id = hrtfid,
+                                           device = device
+                                
                                            )
         dataloader = torch.utils.data.DataLoader(val_dataset,
                                              batch_size=batch_size,

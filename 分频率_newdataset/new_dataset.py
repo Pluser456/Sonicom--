@@ -178,6 +178,7 @@ class SingleSubjectDataSet(SonicomDataSet):
     def __init__(
             self, 
             hrtf_files: list,
+            device,
             left_images: list, 
             right_images: list,
             train_log_mean_hrtf_left: np.ndarray,
@@ -185,6 +186,8 @@ class SingleSubjectDataSet(SonicomDataSet):
             subject_id: int,
             transform=None,
             mode="both",
+            
+            
     ):
         """
         Args:
@@ -204,7 +207,7 @@ class SingleSubjectDataSet(SonicomDataSet):
         single_hrtf = [hrtf_files[target_idx]]
         single_left = [left_images[target_idx]]
         single_right = [right_images[target_idx]]
-        
+
         # 调用父类初始化
         super().__init__(
             hrtf_files=single_hrtf,
@@ -213,6 +216,7 @@ class SingleSubjectDataSet(SonicomDataSet):
             transform=transform,
             calc_mean=False,
             mode=mode,
+            device=device,
             provided_mean_left=train_log_mean_hrtf_left,
             provided_mean_right=train_log_mean_hrtf_right
         )
@@ -221,9 +225,10 @@ class SingleSubjectDataSet(SonicomDataSet):
 
     def __len__(self):
         """返回单个受试者的总方位数"""
-        return self.positions_per_subject
+        return len(self.hrtf_files) # 还不知道是哪个
+        # return self.positions_per_subject
 
-    def __getitem__(self, idx):
+    def __getitem__(self, position_idx):
         """
         获取数据项
         Args:
@@ -241,29 +246,29 @@ class SingleSubjectDataSet(SonicomDataSet):
                 torch.sin(original_position_rad[:, 1])  # sin(elevation)
             ], dim=1)
 
-            left_voxel = self.left_tensor[0, :, :, :]
-            right_voxel = self.right_tensor[0, :, :, :]
+            left_img = self.left_tensor[0, :, :, :]
+            right_img = self.right_tensor[0, :, :, :]
             # 获取训练集对应的均值，注意是训练集！
             # 同时获取原始HRTF
             if self.mode == "left":
-                mean_value = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
+                mean_value = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32) # 删掉了.reshape(1, -1)
             elif self.mode == "right":
-                mean_value = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
-                hrtf = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
+                mean_value = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
+                hrtf = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
             else:
-                mean_left = torch.tensor(self.log_mean_hrtf_left[idx, :]).type(torch.float32)
-                mean_right = torch.tensor(self.log_mean_hrtf_right[idx, :]).type(torch.float32)
+                mean_left = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
+                mean_right = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
                 mean_value = torch.cat([mean_left, mean_right], dim=0)
-                hrtf_left = torch.tensor(data["F_left"][idx, :]).reshape(1, -1).type(torch.float32)
-                hrtf_right = torch.tensor(data["F_right"][idx, :]).reshape(1, -1).type(torch.float32)
+                hrtf_left = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32)
+                hrtf_right = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
 
-        # 读取并处理图像
-        left_img = Image.open(self.left_images[0]).convert('RGB')
-        right_img = Image.open(self.right_images[0]).convert('RGB')
-        left_img = self.transform(left_img)
-        right_img = self.transform(right_img)
+        # # 读取并处理图像
+        # left_img = Image.open(self.left_images[0]).convert('RGB')
+        # right_img = Image.open(self.right_images[0]).convert('RGB')
+        # left_img = self.transform(left_img)
+        # right_img = self.transform(right_img)
 
         return {
             "hrtf": hrtf,
