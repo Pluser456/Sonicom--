@@ -11,3 +11,5 @@ runs/
 *.png
 *.pyc
 tb_logs/
+WinFFT_HRTF/
+NewVAECode/CVAEweights/

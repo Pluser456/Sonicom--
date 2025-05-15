@@ -7,10 +7,12 @@ from TestNet import ResNet3D as threeDResnet
 from TestNet import ResNet2D as twoDResnet
 from new_dataset import SonicomDataSet
 from utils import split_dataset, train_one_epoch, evaluate
+from torch.utils.tensorboard import SummaryWriter
+import time
 
 def main():
     # 设备配置
-    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = True  # 是否使用差值HRTF数据
@@ -54,7 +56,7 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
+    dataset_paths = split_dataset(ear_dir, "WinFFT_HRTF",inputform=inputform)
     
     # 创建数据集
     train_dataset = SonicomDataSet(
@@ -101,31 +103,35 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
-    
+    optimizer = optim.AdamW(model.parameters(), lr=5e-5, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.75)
+    writer = SummaryWriter(log_dir=f"runs/{current_model}/test_{time.strftime('%m-%d_%H-%M')}")
     # 训练循环
     num_epochs = 480*5
     best_loss = 300
     
-    patience = 10  # 早停的容忍次数
+    patience = 30  # 早停的容忍次数
     patience_counter = 0
 
     for epoch in range(0, num_epochs + 1):
         # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
+        loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
 
         # 验证
         train_dataset.turn_auxiliary_mode(True)
         val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
         train_dataset.turn_auxiliary_mode(False)
+        writer.add_scalar("Loss/train", loss, epoch)
+        writer.add_scalar("Loss/val", val_loss, epoch)
 
+        scheduler.step()
+        writer.add_scalar("Learning Rate", scheduler.get_last_lr()[0], epoch)
         # 检查是否是最佳模型
         if val_loss < best_loss:
             best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-            print(f"Saved best model with validation loss: {best_loss:.4f}")
+            # torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            # print(f"Saved best model with validation loss: {best_loss:.4f}")
         else:
             patience_counter += 1
 
@@ -135,9 +141,9 @@ def main():
             break
 
         # 保存当前模型
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
-            print(f"Saved model at epoch {epoch}")
+        # if epoch % 50 == 0:
+        #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
+        #     print(f"Saved model at epoch {epoch}")
 
 if __name__ == "__main__":
     main()
