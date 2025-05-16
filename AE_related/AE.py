@@ -30,7 +30,7 @@ class PositionalEncoding(nn.Module):
 # --- Transformer Encoder for HRTF ---
 class HrtfTransformerEncoder(nn.Module):
     def __init__(self, hrtf_row_width=108, num_heads=4, num_encoder_layers=3,
-                 dim_feedforward=1024, latent_feature_dim=256, dropout=0.1, feature_num=2,
+                 dim_feedforward=1024, dropout=0.1, feature_num=2,
                  hrtf_num_rows=793): # hrtf_num_rows for PositionalEncoding max_len
         super().__init__()
         self.d_model = hrtf_row_width  # Feature dimension of each HRTF row
@@ -50,9 +50,6 @@ class HrtfTransformerEncoder(nn.Module):
             norm_first=True # 
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
-        
-        # Linear layer to map the aggregated output of Transformer to latent_feature_dim
-        self.output_fc = nn.Linear(self.d_model*feature_num, latent_feature_dim)
 
     def forward(self, hrtf: torch.Tensor) -> torch.Tensor:
         """
@@ -77,11 +74,8 @@ class HrtfTransformerEncoder(nn.Module):
         transformer_output = self.transformer_encoder(x)  # Output shape (batch, hrtf_num_rows, d_model)
         
         # Aggregate the transformer output. Here, we take the mean across the sequence dimension.
-        aggregated_output = transformer_output[:, 0:self.feature_num, :].reshape(transformer_output.shape[0], -1)  # Shape (batch, feature_num * d_model)
-        
-        feature = self.output_fc(aggregated_output)  # Shape (batch, latent_feature_dim)
-        
-        return feature
+        aggregated_output = transformer_output[:, 0:self.feature_num, :]  # Shape (batch, feature_num, d_model)
+        return aggregated_output # (batch_size, feature_num, d_model)
 
 
 # --- HrtfDecoder (逐行MLP解码器，保持不变) ---
@@ -113,11 +107,11 @@ class ResidualBlock(nn.Module):
         return out
 
 class HrtfDecoder(nn.Module):
-    def __init__(self, latent_feature_dim=128, pos_dim_per_row=3, hrtf_row_output_width=108, decoder_mlp_hidden_dims=None):
+    def __init__(self, decoder_input_dim=128, pos_dim_per_row=3, decoder_output_dim=108, decoder_mlp_hidden_dims=None):
         super().__init__()
-        self.latent_feature_dim = latent_feature_dim
+        self.latent_feature_dim = decoder_input_dim
         self.pos_dim_per_row = pos_dim_per_row
-        self.hrtf_row_output_width = hrtf_row_output_width
+        self.hrtf_row_output_width = decoder_output_dim
 
         mlp_layers = []
         current_dim = self.latent_feature_dim + self.pos_dim_per_row
@@ -158,8 +152,9 @@ class HrtfDecoder(nn.Module):
 
 # --- HRTFAutoencoder (更新以支持Transformer编码器) ---
 class HRTFAutoencoder(nn.Module):
-    def __init__(self, latent_feature_dim=128, pos_dim_per_row=3, 
+    def __init__(self, pos_dim_per_row=3, 
                  hrtf_num_rows=793, hrtf_row_width=108, 
+                 encoder_out_vec_num=3, # Transformer 输出的前几列作为特征输出
                  decoder_mlp_hidden_dims=None, 
                  encoder_transformer_config=None # For HrtfTransformerEncoder
                  ): 
@@ -175,24 +170,140 @@ class HRTFAutoencoder(nn.Module):
             num_heads=encoder_transformer_config.get("num_heads", 4), # Default 4 heads
             num_encoder_layers=encoder_transformer_config.get("num_encoder_layers", 3), # Default 3 layers
             dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512), # Default 512
-            latent_feature_dim=latent_feature_dim,
             dropout=encoder_transformer_config.get("dropout", 0.1), # Default 0.1 dropout
-            feature_num=3,
+            feature_num=encoder_out_vec_num,
             hrtf_num_rows=self.hrtf_num_rows
         )
         self.model_name = "HRTF_AE_TransformerEncoder_RowWiseDecoder"
 
         self.decoder = HrtfDecoder(
-            latent_feature_dim=latent_feature_dim,
+            decoder_input_dim=self.hrtf_row_width*encoder_out_vec_num,
             pos_dim_per_row=pos_dim_per_row,
-            hrtf_row_output_width=self.hrtf_row_width,
+            decoder_output_dim=self.hrtf_row_width,
             decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
         )
-        
-        self.latent_feature_dim = latent_feature_dim
         self.pos_dim_per_row = pos_dim_per_row
+        # Linear layer to map the aggregated output of Transformer to latent_feature_dim
+        # self.encoder_mlp = nn.Linear(, latent_feature_dim)
 
     def forward(self, hrtf_data, pos_data):
-        feature = self.encoder(hrtf_data) 
+        feature = self.encoder(hrtf_data).reshape(hrtf_data.shape[0], -1)
+        # feature = self.encoder_mlp(feature)  # (B, latent_feature_dim)
         reconstructed_hrtf = self.decoder(feature, pos_data)
         return reconstructed_hrtf, feature
+    
+class VectorQuantizer(nn.Module):
+    def __init__(self, num_embeddings, embedding_dim, commitment_cost):
+        super(VectorQuantizer, self).__init__()
+        
+        self._embedding_dim = embedding_dim
+        self._num_embeddings = num_embeddings
+        
+        self._embedding = nn.Embedding(self._num_embeddings, self._embedding_dim)
+        self._embedding.weight.data.uniform_(-1./self._num_embeddings, 1./self._num_embeddings)
+        self._commitment_cost = commitment_cost
+
+    def forward(self, inputs):
+        # inputs: (B, C, H, W) or (B, L, C) from Transformer
+        # C is embedding_dim
+
+        # 保留原始形状
+        input_shape = inputs.shape
+        
+        # 将输入扁平化: (B, C, H, W) -> (B*H*W, C) or (B, L, C) -> (B*L, C)
+        if inputs.dim() == 4: # From CNN-like encoder
+            flat_input = inputs.permute(0, 2, 3, 1).contiguous() # (B, H, W, C)
+            flat_input = flat_input.view(-1, self._embedding_dim)
+        elif inputs.dim() == 3: # From Transformer-like encoder (B, L, C)
+            flat_input = inputs.reshape(-1, self._embedding_dim)
+        else:
+            raise ValueError(f"Input tensor to VectorQuantizer has unsupported dimensions: {inputs.dim()}")
+
+        # 计算与码本向量的距离
+        distances = (torch.sum(flat_input**2, dim=1, keepdim=True) 
+                    + torch.sum(self._embedding.weight**2, dim=1)
+                    - 2 * torch.matmul(flat_input, self._embedding.weight.t()))
+            
+        # 编码: 找到最近的码本向量的索引
+        encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+        encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+        encodings.scatter_(1, encoding_indices, 1)
+        
+        # 量化: 从码本中获取量化后的向量
+        quantized = torch.matmul(encodings, self._embedding.weight).view_as(flat_input) # (B*H*W, C) or (B*L,C)
+        
+        # 计算损失
+        e_latent_loss = F.mse_loss(quantized.detach(), flat_input) # Codebook loss
+        q_latent_loss = F.mse_loss(quantized, flat_input.detach()) # Commitment loss
+        loss = q_latent_loss + self._commitment_cost * e_latent_loss
+        
+        # Straight Through Estimator (STE)
+        quantized_sg = flat_input + (quantized - flat_input).detach()
+        
+        # 将量化后的向量重塑回原始输入的形状 (除了通道维度可能在最后)
+        if inputs.dim() == 4:
+            quantized_out = quantized_sg.view(input_shape[0], input_shape[2], input_shape[3], input_shape[1])
+            quantized_out = quantized_out.permute(0, 3, 1, 2).contiguous() # (B, C, H, W)
+        elif inputs.dim() == 3:
+            quantized_out = quantized_sg.view(input_shape) # (B, L, C)
+            
+        return quantized_out, loss, encoding_indices.view(input_shape[0], -1) # 返回量化输出，VQ损失，和编码索引
+    
+class HRTF_VQVAE(nn.Module):
+    def __init__(self, 
+                 hrtf_row_width, # Transformer 的 d_model, 也是 VQ 的 embedding_dim
+                 hrtf_num_rows,  # Transformer 输入的原始序列长度
+                 encoder_out_vec_num, # VQ 输入的目标序列长度 (例如 108)
+                 encoder_transformer_config,
+                 num_embeddings, 
+                 commitment_cost,
+                 pos_dim_per_row,
+                 decoder_mlp_hidden_dims
+                 ): 
+        super().__init__()
+        
+        self.hrtf_row_width = hrtf_row_width
+        self.encoder_out_vec_num = encoder_out_vec_num # 例如 108
+
+        self.encoder = HrtfTransformerEncoder(
+            hrtf_row_width=self.hrtf_row_width, 
+            hrtf_num_rows=hrtf_num_rows, # 原始输入序列长度 (例如 793)
+            feature_num=self.encoder_out_vec_num, # 编码器输出此长度的序列 (例如 108)
+            num_heads=encoder_transformer_config.get("num_heads", 4),
+            num_encoder_layers=encoder_transformer_config.get("num_encoder_layers", 3),
+            dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512),
+            dropout=encoder_transformer_config.get("dropout", 0.1)
+        )
+        self.model_name = "HRTF_VQVAE_FlattenedVQ_Decoder"
+
+        self.vq_layer = VectorQuantizer(num_embeddings, self.hrtf_row_width, commitment_cost)
+
+        # self.projector = nn.Linear(self.hrtf_row_width, 1)
+
+        # 解码器的 latent_feature_dim 是展平后的 VQ 输出维度
+        decoder_latent_dim = self.hrtf_row_width * self.encoder_out_vec_num
+        self.decoder = HrtfDecoder(
+            decoder_input_dim=decoder_latent_dim, 
+            pos_dim_per_row=pos_dim_per_row,
+            decoder_output_dim=self.hrtf_row_width, # 假设输出的每行 HRTF 宽度仍为 d_model
+            decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
+        )
+
+    def forward(self, hrtf_data, pos_data):
+        # hrtf_data: (B, 1, hrtf_num_rows, hrtf_row_width)
+        # pos_data: (B, hrtf_num_rows, pos_dim_per_row)
+
+        # ze: (B, target_seq_len_for_vq, d_model) 例如 (B, 108, 108)
+        ze = self.encoder(hrtf_data) 
+        
+        # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
+        zq, vq_loss, _ = self.vq_layer(ze) 
+        
+        # 将 zq 展平
+        zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
+        
+        # 将展平后的 zq 和 pos_data 传递给解码器
+        # reconstructed_hrtf: (B, 1, hrtf_num_rows, hrtf_row_width)
+        reconstructed_hrtf = self.decoder(zq_flat, pos_data)
+        
+        return reconstructed_hrtf, vq_loss

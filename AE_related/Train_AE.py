@@ -64,12 +64,13 @@ test_loader = DataLoader(
 )
 
 # --- 模型实例化和优化器 ---
-from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers
+from AEconfig import pos_dim_for_each_row,\
+      num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num
 
 
 model = HRTFAutoencoder(
-    latent_feature_dim=latent_dim,
     pos_dim_per_row=pos_dim_for_each_row,
+    encoder_out_vec_num=encoder_out_vec_num,
     hrtf_num_rows=num_hrtf_rows,
     hrtf_row_width=width_per_hrtf_row,
     decoder_mlp_hidden_dims=decoder_mlp_layers,
@@ -91,7 +92,7 @@ num_epochs = 1000 # 示例 epoch 数
 # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.85, min_lr=1e-6, patience=10)
 scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=50, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
-writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_lat_d_{str(latent_dim)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
+writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 
 def visualize_hrtf(model, test_loader, device, save_path, max_samples=16):

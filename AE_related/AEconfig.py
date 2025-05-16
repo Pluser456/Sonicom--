@@ -3,7 +3,7 @@ pos_dim_for_each_row = 3
 num_hrtf_rows = 793       # HRTF的行数 (序列长度)
 width_per_hrtf_row = 108  # HRTF每行的宽度 (特征维度 d_model)
 current_encoder_type = "transformer"
-
+encoder_out_vec_num = 3
 # 为Transformer编码器配置 (如果选择 "transformer")
 # d_model (hrtf_row_width=108) 必须能被 num_heads 整除
 transformer_encoder_settings = {
