@@ -1,5 +1,6 @@
 import os
 import time
+from numpy import indices
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,7 +98,7 @@ for epoch in range(num_epochs):
     epoch_loss_vq = 0
     
     train_progress_bar = tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", file=sys.stdout)
-    
+    indices_list = []
     for i, batch in enumerate(train_progress_bar):
         hrtf = batch["hrtf"].to(device) # 假设形状是 (batch, 793, 108)
         if hrtf.dim() == 3:
@@ -106,8 +107,8 @@ for epoch in range(num_epochs):
 
         optimizer.zero_grad()
         
-        reconstructed_hrtf, vq_loss = model(hrtf, pos)
-        
+        reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
+        indices_list.append(indices)
         recon_loss = reconstruction_loss_fn(reconstructed_hrtf, hrtf)
         total_loss = recon_loss + vq_loss # vq_loss 内部已包含 commitment_cost * e_latent_loss
         
@@ -118,21 +119,25 @@ for epoch in range(num_epochs):
         epoch_loss_recon += recon_loss.item()
         epoch_loss_vq += vq_loss.item()
         
-        train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.3f} "
-                                   f"loss_vq: {epoch_loss_vq/(i+1):.3f} "
-                                   f"lr: {optimizer.param_groups[0]['lr']:.3e}")
+        train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
+                                   f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
+                                   f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
+    indicies = torch.cat(indices_list, dim=0)
+    activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
 
     avg_recon_loss_train = epoch_loss_recon / len(train_loader)
     avg_vq_loss_train = epoch_loss_vq / len(train_loader)
     writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
     writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
     writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
+    writer.add_scalar("activity", activity, epoch)
     # print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
 
     # --- 验证循环 (可选) ---
     model.eval()
     val_loss_recon = 0
     val_loss_vq = 0
+    indices_list = []
     with torch.no_grad():
         val_progress_bar = tqdm.tqdm(test_loader, file=sys.stdout)
         for step, batch in enumerate(val_progress_bar):
@@ -141,9 +146,9 @@ for epoch in range(num_epochs):
                 hrtf_val = hrtf_val.unsqueeze(1)
             pos_val = batch["position"].to(device)
             
-            reconstructed_hrtf_val, vq_loss_val = model(hrtf_val, pos_val)
+            reconstructed_hrtf_val, vq_loss_val, indices = model(hrtf_val, pos_val)
             recon_loss_val = reconstruction_loss_fn(reconstructed_hrtf_val, hrtf_val)
-            
+            indices_list.append(indices)
             val_loss_recon += recon_loss_val.item()
             val_loss_vq += vq_loss_val.item()
             val_progress_bar.desc = (f"[valid epoch {epoch+1}] loss_recon: {val_loss_recon/(step+1):.3f} "
@@ -151,11 +156,12 @@ for epoch in range(num_epochs):
     
     avg_recon_loss_val = val_loss_recon / len(test_loader)
     avg_vq_loss_val = val_loss_vq / len(test_loader)
+    activity_val = torch.unique(torch.cat(indices_list, dim=0)).numel() / num_codebook_embeddings * 100
     # print(f"Epoch {epoch+1} Valid: Recon Loss: {avg_recon_loss_val:.4f}, VQ Loss: {avg_vq_loss_val:.4f}")
     
     writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
     writer.add_scalar("val_loss_vq", avg_vq_loss_val, epoch)
-
+    writer.add_scalar("val_activity", activity_val, epoch)
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 100 == 0:

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
+from vector_quantize_pytorch import VectorQuantize
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -264,7 +264,7 @@ class HRTF_VQVAE(nn.Module):
         
         self.hrtf_row_width = hrtf_row_width
         self.encoder_out_vec_num = encoder_out_vec_num # 例如 108
-
+        self.num_embeddings = num_embeddings # 码表大小
         self.encoder = HrtfTransformerEncoder(
             hrtf_row_width=self.hrtf_row_width, 
             hrtf_num_rows=hrtf_num_rows, # 原始输入序列长度 (例如 793)
@@ -276,7 +276,8 @@ class HRTF_VQVAE(nn.Module):
         )
         self.model_name = "HRTF_VQVAE_FlattenedVQ_Decoder"
 
-        self.vq_layer = VectorQuantizer(num_embeddings, self.hrtf_row_width, commitment_cost)
+        # self.vq_layer = VectorQuantizer(num_embeddings, self.hrtf_row_width, commitment_cost)
+        self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
 
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
@@ -297,7 +298,7 @@ class HRTF_VQVAE(nn.Module):
         ze = self.encoder(hrtf_data) 
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
-        zq, vq_loss, _ = self.vq_layer(ze) 
+        zq, indices, cmt_loss = self.vq_layer(ze) 
         
         # 将 zq 展平
         zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
@@ -306,4 +307,4 @@ class HRTF_VQVAE(nn.Module):
         # reconstructed_hrtf: (B, 1, hrtf_num_rows, hrtf_row_width)
         reconstructed_hrtf = self.decoder(zq_flat, pos_data)
         
-        return reconstructed_hrtf, vq_loss
+        return reconstructed_hrtf, cmt_loss, indices
