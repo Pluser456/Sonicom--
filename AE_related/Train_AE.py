@@ -50,7 +50,7 @@ test_dataset = OnlyHRTFDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=12,
+    batch_size=6,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -58,7 +58,7 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=24,
+    batch_size=12,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
@@ -92,7 +92,8 @@ num_epochs = 1000 # 示例 epoch 数
 # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.85, min_lr=1e-6, patience=10)
 scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=50, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
-writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
+# writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
+writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_transformer_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 
 def visualize_hrtf(model, test_loader, device, save_path, max_samples=16):

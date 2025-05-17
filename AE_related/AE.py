@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from vector_quantize_pytorch import VectorQuantize
+from vector_quantize_pytorch import VectorQuantize, FSQ
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -149,6 +149,30 @@ class HrtfDecoder(nn.Module):
         reconstructed_hrtf_rows = decoded_rows_flat.view(batch_size, num_rows, self.hrtf_row_output_width)
         reconstructed_hrtf = reconstructed_hrtf_rows.unsqueeze(1)
         return reconstructed_hrtf
+    
+class HrtfTransformerDecoder(nn.Module):
+    def __init__(self, d_model, nhead, num_decoder_layers, dim_feedforward, dropout,
+                 pos_dim_input=3, hrtf_row_output_width=108, max_output_seq_len=793 + 10):
+        super().__init__()
+        self.pos_embed = nn.Linear(pos_dim_input, d_model)
+        self.pos_encoder = PositionalEncoding(d_model, dropout, max_len=max_output_seq_len)
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=d_model, nhead=nhead, dim_feedforward=dim_feedforward,
+            dropout=dropout, batch_first=True, norm_first=True
+        )
+        self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_decoder_layers)
+        self.output_projector = nn.Linear(d_model, hrtf_row_output_width)
+
+    def forward(self, memory, target_pos_sequence):
+        tgt_embedded = self.pos_embed(target_pos_sequence)
+        # tgt_embedded = self.pos_encoder(tgt_embedded)
+        memory = memory.unsqueeze(1).repeat(1, target_pos_sequence.shape[1], 1, 1).flatten(0, 1)
+        tgt_embedded_flatten = tgt_embedded.reshape(-1, tgt_embedded.shape[2]).unsqueeze(1)
+        decoder_output = self.transformer_decoder(memory=memory, tgt=tgt_embedded_flatten)
+        decoder_output = decoder_output.reshape(tgt_embedded.shape)
+        reconstructed_hrtf_rows = self.output_projector(decoder_output)
+        reconstructed_hrtf = reconstructed_hrtf_rows.unsqueeze(1)
+        return reconstructed_hrtf
 
 # --- HRTFAutoencoder (更新以支持Transformer编码器) ---
 class HRTFAutoencoder(nn.Module):
@@ -174,20 +198,31 @@ class HRTFAutoencoder(nn.Module):
             feature_num=encoder_out_vec_num,
             hrtf_num_rows=self.hrtf_num_rows
         )
-        self.model_name = "HRTF_AE_TransformerEncoder_RowWiseDecoder"
+        self.model_name = "HRTF_AE_TransformerEncoder_TransformerDecoder"
 
-        self.decoder = HrtfDecoder(
-            decoder_input_dim=self.hrtf_row_width*encoder_out_vec_num,
-            pos_dim_per_row=pos_dim_per_row,
-            decoder_output_dim=self.hrtf_row_width,
-            decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
-        )
-        self.pos_dim_per_row = pos_dim_per_row
+        # self.decoder = HrtfDecoder(
+        #     decoder_input_dim=self.hrtf_row_width*encoder_out_vec_num,
+        #     pos_dim_per_row=pos_dim_per_row,
+        #     decoder_output_dim=self.hrtf_row_width,
+        #     decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
+        # )
+        # self.pos_dim_per_row = pos_dim_per_row
         # Linear layer to map the aggregated output of Transformer to latent_feature_dim
         # self.encoder_mlp = nn.Linear(, latent_feature_dim)
+        self.decoder = HrtfTransformerDecoder(
+            d_model=self.hrtf_row_width,
+            nhead=encoder_transformer_config.get("num_heads", 4),
+            num_decoder_layers=encoder_transformer_config.get("num_encoder_layers", 3),
+            dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512),
+            dropout=encoder_transformer_config.get("dropout", 0.1),
+            pos_dim_input=pos_dim_per_row,
+            hrtf_row_output_width=self.hrtf_row_width
+        )
+            
 
     def forward(self, hrtf_data, pos_data):
-        feature = self.encoder(hrtf_data).reshape(hrtf_data.shape[0], -1)
+        feature = self.encoder(hrtf_data)
+        # feature = feature.reshape(hrtf_data.shape[0], -1)
         # feature = self.encoder_mlp(feature)  # (B, latent_feature_dim)
         reconstructed_hrtf = self.decoder(feature, pos_data)
         return reconstructed_hrtf, feature
@@ -277,7 +312,9 @@ class HRTF_VQVAE(nn.Module):
         self.model_name = "HRTF_VQVAE_FlattenedVQ_Decoder"
 
         # self.vq_layer = VectorQuantizer(num_embeddings, self.hrtf_row_width, commitment_cost)
-        self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
+        # self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
+
+        self.vq_layer = FSQ(levels=[8, 8, 8])
 
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
@@ -298,7 +335,8 @@ class HRTF_VQVAE(nn.Module):
         ze = self.encoder(hrtf_data) 
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
-        zq, indices, cmt_loss = self.vq_layer(ze) 
+        ze = ze.permute(0, 2, 1)
+        zq, indices = self.vq_layer(ze) 
         
         # 将 zq 展平
         zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
@@ -307,4 +345,4 @@ class HRTF_VQVAE(nn.Module):
         # reconstructed_hrtf: (B, 1, hrtf_num_rows, hrtf_row_width)
         reconstructed_hrtf = self.decoder(zq_flat, pos_data)
         
-        return reconstructed_hrtf, cmt_loss, indices
+        return reconstructed_hrtf, torch.zeros(1).cuda(), indices
