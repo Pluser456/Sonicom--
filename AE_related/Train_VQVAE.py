@@ -112,6 +112,7 @@ for epoch in range(num_epochs):
         total_loss = recon_loss + vq_loss # vq_loss 内部已包含 commitment_cost * e_latent_loss
         
         total_loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         optimizer.step()
         
         epoch_loss_recon += recon_loss.item()
@@ -123,6 +124,9 @@ for epoch in range(num_epochs):
 
     avg_recon_loss_train = epoch_loss_recon / len(train_loader)
     avg_vq_loss_train = epoch_loss_vq / len(train_loader)
+    writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
+    writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
+    writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
     # print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
 
     # --- 验证循环 (可选) ---
@@ -149,9 +153,12 @@ for epoch in range(num_epochs):
     avg_vq_loss_val = val_loss_vq / len(test_loader)
     # print(f"Epoch {epoch+1} Valid: Recon Loss: {avg_recon_loss_val:.4f}, VQ Loss: {avg_vq_loss_val:.4f}")
     
+    writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
+    writer.add_scalar("val_loss_vq", avg_vq_loss_val, epoch)
+
     scheduler.step()
     # 保存模型
-    if (epoch + 1) % 10 == 0:
+    if (epoch + 1) % 100 == 0:
         torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}-usediff.pth")
         print(f"Model saved at epoch {epoch+1}")
 

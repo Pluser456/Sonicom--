@@ -203,7 +203,7 @@ for epoch in range(num_epochs):
             best_val_loss = val_loss / val_size
             visualize_hrtf(model, test_loader, device, f"{weightdir}/hrtf_visualization.png", max_samples=16)
             
-    writer.add_scalar('val_loss', val_loss / len(test_loader), epoch) # 记录验证损失
+    writer.add_scalar('val_loss', val_loss / val_size, epoch) # 记录验证损失
     scheduler.step()  # 更新学习率
     # 保存模型
     if (epoch + 1) % 100 == 0: # 每100个epoch保存一次
