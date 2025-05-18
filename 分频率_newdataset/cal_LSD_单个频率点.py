@@ -17,7 +17,7 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # model_path = "123"
 
-target_index = 65
+target_index = 58
 model_path = f"D:\大学\大三下\大创项目\Sonicom--2d\weights\model999-freq{target_index}.pth"
 
 def evaluate_one_hrtf(model, test_loader, target_index = 50):
