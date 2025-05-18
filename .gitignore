@@ -13,3 +13,5 @@ runs/
 tb_logs/
 NewVAECode/CVAEweights/
 WinFFT_HRTF/
+vector-quantize-pytorch-master/
+vector_quantize_pytorch/
