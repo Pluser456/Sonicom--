@@ -1,8 +1,10 @@
+from re import T
 import torch
 from torch import nn
 from ResNet3D import resnet34_3d as resnet3d
 from ResNet import resnet34 as resnet2d
 import numpy as np
+import torch.nn.functional as F
 
 
 class FeatureExtractor(nn.Module):
@@ -444,3 +446,94 @@ class ResidualBlock(nn.Module):
         
         out = out + residual # 添加残差
         return out
+
+class ResNet2DClassifier(nn.Module):
+    """修改为多头分类网络，输出形状为 [batch_size, 2, 3, 3] 的整数矩阵"""
+    modelname = "2DResNetClassifier"
+    def __init__(self):
+        super(ResNet2DClassifier, self).__init__()
+        img_feature_dim = 2000
+        self.feature_extractor = FeatureExtractor2D()
+        
+        # 特征提取部分保持不变
+        mlp_layers = []
+        mlp_hidden_dims = [512, 384, 256]
+        current_dim = img_feature_dim
+        first_hidden_dim = mlp_hidden_dims[0]
+        mlp_layers.append(ResidualBlock(current_dim, first_hidden_dim, use_batchnorm=False))
+        current_dim = first_hidden_dim
+
+        # 后续隐藏层: 使用 ResidualBlock
+        for i in range(1, len(mlp_hidden_dims)):
+            current_hidden_dim = mlp_hidden_dims[i]
+            mlp_layers.append(ResidualBlock(current_dim, current_hidden_dim, use_batchnorm=True))
+            current_dim = current_hidden_dim
+        
+        # 共享特征提取网络
+        self.shared_fc = nn.Sequential(*mlp_layers)
+        
+        # 定义输出网格大小
+        self.grid_channels = 2
+        self.grid_height = 3
+        self.grid_width = 3
+        self.num_classes = 256  # 0-255 的整数
+        
+        # 创建分类器头，每个位置一个分类器
+        self.classifiers = nn.ModuleList([
+            nn.Linear(current_dim, self.num_classes) 
+            for _ in range(self.grid_channels * self.grid_height * self.grid_width)
+        ])
+
+    def forward(self, left_voxel, right_voxel, device):
+        # 体素特征提取，保持分批处理逻辑
+        max_chunk_batch_size = 40
+        if left_voxel.shape[0] > max_chunk_batch_size:
+            voxel_feature_chunks = []
+            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
+            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
+
+            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
+                lv_chunk = lv_chunk.to(device)
+                rv_chunk = rv_chunk.to(device)
+                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
+                voxel_feature_chunks.append(vf_chunk)
+            
+            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
+        else:
+            left_voxel = left_voxel.to(device)
+            right_voxel = right_voxel.to(device)
+            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
+
+        # 释放内存
+        del left_voxel, right_voxel
+        torch.cuda.empty_cache()
+
+        # 提取共享特征
+        shared_features = self.shared_fc(voxel_feature)
+        
+        # 为每个位置进行分类预测
+        batch_size = shared_features.shape[0]
+        total_positions = self.grid_channels * self.grid_height * self.grid_width
+        
+        # 直接输出整数预测
+        # predictions = []
+        # for i in range(total_positions):
+        #     logit = self.classifiers[i](shared_features)
+        #     predictions.append(logit)  # [batch_size, num_classes]
+        # # 重塑为目标形状: [batch_size, 256, 18]
+        # logits = torch.stack(predictions, dim=-1)
+        # # 直接输出整数预测
+        # predictions = []
+        # for i in range(total_positions):
+        #     logit = self.classifiers[i](shared_features)
+        #     pred = torch.argmax(logit, dim=1)  # [batch_size]
+        #     predictions.append(pred)
+        
+        # # 重塑为目标形状: [batch_size, 18]
+        # predictions = torch.stack(predictions, dim=-1)
+        
+        logits = shared_features
+        # 直接输出整数预测
+        pred = torch.argmax(logits, dim=1)  # [batch_size]
+
+        return pred, logits

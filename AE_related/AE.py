@@ -316,11 +316,11 @@ class HRTF_VQVAE(nn.Module):
 
         # self.vq_layer = FSQ(levels=[8, 8, 8])
         self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
-                                              kmeans_init = True,   # set to True
-    kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-    commitment_weight = commitment_cost, # commitment cost
-)
-            
+                                            kmeans_init = True,   # set to True
+                                            kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+                                            commitment_weight = commitment_cost, # commitment cost
+                                            )
+                                                    
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
         # 解码器的 latent_feature_dim 是展平后的 VQ 输出维度
@@ -348,7 +348,7 @@ class HRTF_VQVAE(nn.Module):
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
         # ze = ze.permute(0, 2, 1)
-        zq, indices, vq_loss = self.vq_layer(ze) 
+        zq, indices, vq_loss = self.vq_layer(ze)
         
         # 将 zq 展平
         # zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)

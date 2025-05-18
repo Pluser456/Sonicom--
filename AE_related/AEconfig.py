@@ -15,3 +15,7 @@ transformer_encoder_settings = {
 
 # 为解码器MLP配置
 decoder_mlp_layers = [256, 256, 256, 256, 128] # 可根据需要调整
+
+# VQ-VAE 特定参数
+num_codebook_embeddings = 256 
+commitment_cost_beta = 0.25

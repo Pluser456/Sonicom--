@@ -98,6 +98,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
+    accuracy = torch.zeros(1).to(device)
     optimizer.zero_grad()
 
     data_loader = tqdm(data_loader, file=sys.stdout)  # 显示进度条
@@ -126,23 +127,25 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
             mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
-        elif model.modelname == "2DResNet":
+        elif model.modelname == "2DResNetClassifier":
+            loss_function = nn.CrossEntropyLoss()
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
             pos = sample_batch["position"]
             # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
+            feature = feature.reshape(feature.shape[0], -1)[:, 0]
 
-
-            mu, target_y_sel = model(left_voxel, right_voxel, feature, device=device)
-            loss = loss_function(mu, target_y_sel)
+            pred, logits = model(left_voxel, right_voxel, device=device)
+            loss = loss_function(logits, feature)
+            accuracy += (pred == feature).float().mean()
 
         accu_loss += loss.detach()
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
-        data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
+        data_loader.desc = "[train epoch {}] loss: {:.3f} acc: {:.3f}".format(epoch, accu_loss.item() / (step + 1), accuracy.item() / (step + 1))
 
         optimizer.step()
         optimizer.zero_grad()
@@ -157,7 +160,7 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
     accu_loss = torch.zeros(1).to(device)
 
     auxiliary_batch = next(iter(auxiliary_loader))
-
+    tot_accuracy = torch.zeros(1).to(device)
     data_loader = tqdm(data_loader, file=sys.stdout)
 
     with torch.no_grad():
@@ -173,6 +176,21 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 target = hrtf.to(device).squeeze(0)
 
                 loss = loss_function(mu, target)
+            elif model.modelname == "2DResNetClassifier":
+                loss_function = nn.CrossEntropyLoss()
+                left_voxel = sample_batch["left_voxel"]
+                right_voxel = sample_batch["right_voxel"]
+                pos = sample_batch["position"]
+                # hrtf = sample_batch["hrtf"]
+                feature = sample_batch["feature"]
+                feature = feature.reshape(feature.shape[0], -1)[:, 0]
+
+                preds, logits = model(left_voxel, right_voxel, device=device)
+
+                accuracy = (preds == feature).float().mean()
+                loss = loss_function(logits, feature)
+
+                tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNet":
                 left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
@@ -192,8 +210,7 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 mu, target_y_sel = model(left_voxel, right_voxel, feature, device=device)
                 loss = loss_function(mu, target_y_sel)
             accu_loss += loss.detach()
-
-            data_loader.desc = "[valid epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
+            data_loader.desc = "[valid epoch {}] loss: {:.3f} acc: {:.3f}".format(epoch, accu_loss.item() / (step + 1), tot_accuracy.item() / (step + 1))
 
     final_loss = accu_loss.item() / (step + 1)
     return final_loss

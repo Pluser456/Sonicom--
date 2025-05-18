@@ -115,12 +115,6 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=1,
-        shuffle=False,
-        collate_fn=test_dataset.collate_fn
-    )
     optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.85) # 例如，每100个epoch学习率减半

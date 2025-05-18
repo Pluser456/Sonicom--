@@ -65,12 +65,9 @@ test_loader = DataLoader(
 
 # --- 模型实例化和优化器 ---
 
-# VQ-VAE 特定参数
-num_codebook_embeddings = 256 
-commitment_cost_beta = 0.25
 
 from AEconfig import transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row
+    pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, num_codebook_embeddings, commitment_cost_beta
 
 model = HRTF_VQVAE(
     hrtf_row_width=width_per_hrtf_row,
@@ -165,7 +162,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 100 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}-usediff.pth")
+        torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")
