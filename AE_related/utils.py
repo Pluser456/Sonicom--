@@ -47,8 +47,8 @@ def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None, inpu
     right_test = [x for i, x in enumerate(right_voxel_list) if i in test_indices]
     
     # 从体素名称中提取编号
-    train_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in left_train]
-    test_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in left_test]
+    train_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in right_train]
+    test_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in right_test]
     
     # 过滤HRTF文件列表
     train_hrtf_list = [x for x in os.listdir(hrtf_dir) if int(x.split('.')[0][1:]) in train_voxel_numbers]

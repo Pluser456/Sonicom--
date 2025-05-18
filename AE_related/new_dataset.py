@@ -172,7 +172,7 @@ class OnlyHRTFDataSet(SonicomDataSet):
                  status="train",
                  calc_mean=True, use_diff=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
-        self.hrtf_files = self._validate_hrtf_files(hrtf_files)
+        self.hrtf_files = hrtf_files
         self.mode = mode
         self.status = status
         if calc_mean:

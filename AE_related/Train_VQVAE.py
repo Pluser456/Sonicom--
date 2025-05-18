@@ -20,14 +20,14 @@ log_dir = "./runs/HRTF_VQVAE_TransformerDecoder_compact" # <--- TensorBoard 日�
 usediff = False  # 是否使用差值HRTF数据
 
 weightdir = "./HRTFAEweights"
-ear_dir = "Ear_image_gray"
+ear_dir = "Ear_image_gray_Wi"
 if os.path.exists(weightdir) is False:
     os.makedirs(weightdir)
 modelpath = f"{weightdir}/{weightname}"
 positions_chosen_num = 793
 inputform = "image"
 
-dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
+dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 
 train_dataset = OnlyHRTFDataSet(
     dataset_paths["train_hrtf_list"],
@@ -49,7 +49,7 @@ test_dataset = OnlyHRTFDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=8,
+    batch_size=1,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -84,8 +84,8 @@ print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requir
 
 optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
-num_epochs = 1000
-scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=50, num_training_steps=num_epochs)
+num_epochs = 30
+scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=3, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
 writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
@@ -161,7 +161,7 @@ for epoch in range(num_epochs):
     writer.add_scalar("val_activity", activity_val, epoch)
     scheduler.step()
     # 保存模型
-    if (epoch + 1) % 100 == 0:
+    if (epoch + 1) % 30 == 0:
         torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}")
         print(f"Model saved at epoch {epoch+1}")
 

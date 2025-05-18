@@ -40,7 +40,8 @@ class HrtfTransformerEncoder(nn.Module):
         # For simplicity, we assume hrtf_row_width is d_model
         self.feature_num = feature_num # 使用transformer输出的前几列作为特征输出
         self.pos_encoder = PositionalEncoding(self.d_model, dropout, max_len=hrtf_num_rows + 10) # +10 for safety margin
-        
+        self.pos_embed_mlp = nn.Sequential(nn.Linear(3, self.d_model),
+                                            nn.ReLU(), nn.Linear(self.d_model, self.d_model))
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=self.d_model,
             nhead=num_heads,
@@ -51,7 +52,7 @@ class HrtfTransformerEncoder(nn.Module):
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
 
-    def forward(self, hrtf: torch.Tensor) -> torch.Tensor:
+    def forward(self, hrtf: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
         """
         hrtf: Input HRTF data, shape (batch_size, 1, hrtf_num_rows, hrtf_row_width)
               e.g., (batch_size, 1, 793, 108)
@@ -69,8 +70,8 @@ class HrtfTransformerEncoder(nn.Module):
         
         # x shape: (batch_size, seq_len=hrtf_num_rows, features=d_model)
 
-        x = self.pos_encoder(x)  # Add positional encoding
-        
+        pos = self.pos_embed_mlp(pos)  # Add positional encoding
+        x = x + pos  # Add positional encoding to input
         transformer_output = self.transformer_encoder(x)  # Output shape (batch, hrtf_num_rows, d_model)
         
         # Aggregate the transformer output. Here, we take the mean across the sequence dimension.
@@ -344,7 +345,7 @@ class HRTF_VQVAE(nn.Module):
     def forward(self, hrtf_data, pos_data):
 
         # ze: (B, target_seq_len_for_vq, d_model) 例如 (B, 108, 108)
-        ze = self.encoder(hrtf_data) 
+        ze = self.encoder(hrtf_data, pos_data) 
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
         # ze = ze.permute(0, 2, 1)
