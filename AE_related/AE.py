@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from vector_quantize_pytorch import VectorQuantize, FSQ
+from vector_quantize_pytorch import VectorQuantize, FSQ,GroupedResidualVQ
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -314,35 +314,48 @@ class HRTF_VQVAE(nn.Module):
         # self.vq_layer = VectorQuantizer(num_embeddings, self.hrtf_row_width, commitment_cost)
         # self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
 
-        self.vq_layer = FSQ(levels=[8, 8, 8])
-
+        # self.vq_layer = FSQ(levels=[8, 8, 8])
+        self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
+                                              kmeans_init = True,   # set to True
+    kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+    commitment_weight = commitment_cost, # commitment cost
+)
+            
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
         # 解码器的 latent_feature_dim 是展平后的 VQ 输出维度
-        decoder_latent_dim = self.hrtf_row_width * self.encoder_out_vec_num
-        self.decoder = HrtfDecoder(
-            decoder_input_dim=decoder_latent_dim, 
-            pos_dim_per_row=pos_dim_per_row,
-            decoder_output_dim=self.hrtf_row_width, # 假设输出的每行 HRTF 宽度仍为 d_model
-            decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
+        # decoder_latent_dim = self.hrtf_row_width * self.encoder_out_vec_num
+        # self.decoder = HrtfDecoder(
+        #     decoder_input_dim=decoder_latent_dim, 
+        #     pos_dim_per_row=pos_dim_per_row,
+        #     decoder_output_dim=self.hrtf_row_width, # 假设输出的每行 HRTF 宽度仍为 d_model
+        #     decoder_mlp_hidden_dims=decoder_mlp_hidden_dims
+        # )
+        self.decoder = HrtfTransformerDecoder(
+            d_model=self.hrtf_row_width,
+            nhead=encoder_transformer_config.get("num_heads", 4),
+            num_decoder_layers=encoder_transformer_config.get("num_encoder_layers", 3),
+            dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512),
+            dropout=encoder_transformer_config.get("dropout", 0.1),
+            pos_dim_input=pos_dim_per_row,
+            hrtf_row_output_width=self.hrtf_row_width
         )
 
     def forward(self, hrtf_data, pos_data):
-        # hrtf_data: (B, 1, hrtf_num_rows, hrtf_row_width)
-        # pos_data: (B, hrtf_num_rows, pos_dim_per_row)
 
         # ze: (B, target_seq_len_for_vq, d_model) 例如 (B, 108, 108)
         ze = self.encoder(hrtf_data) 
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
-        ze = ze.permute(0, 2, 1)
-        zq, indices = self.vq_layer(ze) 
+        # ze = ze.permute(0, 2, 1)
+        zq, indices, vq_loss = self.vq_layer(ze) 
         
         # 将 zq 展平
-        zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
+        # zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
         
         # 将展平后的 zq 和 pos_data 传递给解码器
         # reconstructed_hrtf: (B, 1, hrtf_num_rows, hrtf_row_width)
+        zq_flat = zq
         reconstructed_hrtf = self.decoder(zq_flat, pos_data)
         
-        return reconstructed_hrtf, torch.zeros(1).cuda(), indices
+        return reconstructed_hrtf, vq_loss.sum(), indices

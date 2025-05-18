@@ -49,7 +49,7 @@ test_dataset = OnlyHRTFDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=12,
+    batch_size=8,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -57,7 +57,7 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=24,
+    batch_size=20,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
@@ -66,7 +66,7 @@ test_loader = DataLoader(
 # --- 模型实例化和优化器 ---
 
 # VQ-VAE 特定参数
-num_codebook_embeddings = 108 
+num_codebook_embeddings = 256 
 commitment_cost_beta = 0.25
 
 from AEconfig import transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
@@ -122,7 +122,7 @@ for epoch in range(num_epochs):
         train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
                                    f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
                                    f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
-    indicies = torch.cat(indices_list, dim=0)
+    indicies = torch.cat(indices_list, dim=1)
     activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
 
     avg_recon_loss_train = epoch_loss_recon / len(train_loader)
@@ -156,7 +156,7 @@ for epoch in range(num_epochs):
     
     avg_recon_loss_val = val_loss_recon / len(test_loader)
     avg_vq_loss_val = val_loss_vq / len(test_loader)
-    activity_val = torch.unique(torch.cat(indices_list, dim=0)).numel() / num_codebook_embeddings * 100
+    activity_val = torch.unique(torch.cat(indices_list, dim=1)).numel() / num_codebook_embeddings * 100
     # print(f"Epoch {epoch+1} Valid: Recon Loss: {avg_recon_loss_val:.4f}, VQ Loss: {avg_vq_loss_val:.4f}")
     
     writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
