@@ -134,7 +134,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             # pos = sample_batch["position"]
             # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
-            feature = feature.reshape(feature.shape[0], -1)[:, 0]
+            feature = feature.reshape(feature.shape[0], -1)
 
             pred, logits = model(right_voxel, device=device)
             loss = loss_function(logits, feature)
@@ -182,7 +182,7 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 # pos = sample_batch["position"]
                 # hrtf = sample_batch["hrtf"]
                 feature = sample_batch["feature"]
-                feature = feature.reshape(feature.shape[0], -1)[:, 0]
+                feature = feature.reshape(feature.shape[0], -1)
 
                 preds, logits = model(right_voxel, device=device)
 

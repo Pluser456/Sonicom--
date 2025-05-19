@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from vector_quantize_pytorch import VectorQuantize, FSQ,GroupedResidualVQ
+from vector_quantize_pytorch import VectorQuantize, FSQ,GroupedResidualVQ, ResidualVQ
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -321,6 +321,12 @@ class HRTF_VQVAE(nn.Module):
                                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
                                             commitment_weight = commitment_cost, # commitment cost
                                             )
+        
+        # self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3,
+        #                             kmeans_init = True,   # set to True
+        #                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+        #                             commitment_weight = commitment_cost, # commitment cost
+        #                             )
                                                     
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 

@@ -14,7 +14,7 @@ from new_dataset import OnlyHRTFDataSet
 from utils import split_dataset
 from AE import HRTF_VQVAE
 
-weightname = ".pth"
+weightname = "model-vqvae-30oyy.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 log_dir = "./runs/HRTF_VQVAE_TransformerDecoder_compact" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据
@@ -34,13 +34,13 @@ train_dataset = OnlyHRTFDataSet(
     use_diff=usediff,
     calc_mean=True,
     status="test", # 因为这里希望坐标是按顺序输入的
-    mode="left"
+    mode="right"
 )
 test_dataset = OnlyHRTFDataSet(
     dataset_paths["test_hrtf_list"],
     calc_mean=False,
     status="test",
-    mode="left",
+    mode="right",
     use_diff=usediff,
     provided_mean_left=train_dataset.log_mean_hrtf_left,
     provided_mean_right=train_dataset.log_mean_hrtf_right
@@ -57,7 +57,7 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=20,
+    batch_size=1,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
@@ -80,6 +80,9 @@ model = HRTF_VQVAE(
     decoder_mlp_hidden_dims=decoder_mlp_layers
 ).to(device)
 
+if os.path.exists(modelpath):
+    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    print("Load model from", modelpath)
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
 optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
@@ -90,44 +93,44 @@ transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transfor
 writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 for epoch in range(num_epochs):
-    model.train()
-    epoch_loss_recon = 0
-    epoch_loss_vq = 0
+    # model.train()
+    # epoch_loss_recon = 0
+    # epoch_loss_vq = 0
     
-    train_progress_bar = tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", file=sys.stdout)
-    indices_list = []
-    for i, batch in enumerate(train_progress_bar):
-        hrtf = batch["hrtf"].to(device) # 假设形状是 (batch, 793, 108)
-        if hrtf.dim() == 3:
-            hrtf = hrtf.unsqueeze(1) # -> (batch, 1, 793, 108)
-        pos = batch["position"].to(device)   # (batch, 793, 3)
+    # train_progress_bar = tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", file=sys.stdout)
+    # indices_list = []
+    # for i, batch in enumerate(train_progress_bar):
+    #     hrtf = batch["hrtf"].to(device) # 假设形状是 (batch, 793, 108)
+    #     if hrtf.dim() == 3:
+    #         hrtf = hrtf.unsqueeze(1) # -> (batch, 1, 793, 108)
+    #     pos = batch["position"].to(device)   # (batch, 793, 3)
 
-        optimizer.zero_grad()
+    #     optimizer.zero_grad()
         
-        reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
-        indices_list.append(indices)
-        recon_loss = reconstruction_loss_fn(reconstructed_hrtf, hrtf)
-        total_loss = recon_loss + vq_loss # vq_loss 内部已包含 commitment_cost * e_latent_loss
+    #     reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
+    #     indices_list.append(indices)
+    #     recon_loss = reconstruction_loss_fn(reconstructed_hrtf, hrtf)
+    #     total_loss = recon_loss + vq_loss # vq_loss 内部已包含 commitment_cost * e_latent_loss
         
-        total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-        optimizer.step()
+    #     total_loss.backward()
+    #     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+    #     optimizer.step()
         
-        epoch_loss_recon += recon_loss.item()
-        epoch_loss_vq += vq_loss.item()
+    #     epoch_loss_recon += recon_loss.item()
+    #     epoch_loss_vq += vq_loss.item()
         
-        train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
-                                   f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
-                                   f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
-    indicies = torch.cat(indices_list, dim=1)
-    activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
+    #     train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
+    #                                f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
+    #                                f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
+    # indicies = torch.cat(indices_list, dim=1)
+    # activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
 
-    avg_recon_loss_train = epoch_loss_recon / len(train_loader)
-    avg_vq_loss_train = epoch_loss_vq / len(train_loader)
-    writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
-    writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
-    writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
-    writer.add_scalar("activity", activity, epoch)
+    # avg_recon_loss_train = epoch_loss_recon / len(train_loader)
+    # avg_vq_loss_train = epoch_loss_vq / len(train_loader)
+    # writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
+    # writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
+    # writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
+    # writer.add_scalar("activity", activity, epoch)
     # print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
 
     # --- 验证循环 (可选) ---
@@ -162,7 +165,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}")
+        torch.save(model.state_dict(), f"{weightdir}/model-rvqvae-{epoch+1}")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")
