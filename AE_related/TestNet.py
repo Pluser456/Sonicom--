@@ -35,14 +35,10 @@ class FeatureExtractor2D(nn.Module):
         super(FeatureExtractor2D, self).__init__()
         self.conv_net = resnet2d()
         
-    def forward(self, voxel_left, voxel_right):
-        # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
+    def forward(self, voxel_right):
+        # 提取右耳特征
         img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
-
-        # 拼接图像特征
-        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
-        return img_feat  # [batch, 256]
+        return img_feat_right  # [batch, 256]
 
 
 def batch_mlp(input_dim, hidden_sizes):
@@ -448,11 +444,11 @@ class ResidualBlock(nn.Module):
         return out
 
 class ResNet2DClassifier(nn.Module):
-    """修改为多头分类网络，输出形状为 [batch_size, 2, 3, 3] 的整数矩阵"""
+    """修改为多头分类网络"""
     modelname = "2DResNetClassifier"
     def __init__(self):
         super(ResNet2DClassifier, self).__init__()
-        img_feature_dim = 2000
+        img_feature_dim = 1000
         self.feature_extractor = FeatureExtractor2D()
         
         # 特征提取部分保持不变
@@ -484,28 +480,13 @@ class ResNet2DClassifier(nn.Module):
             for _ in range(self.grid_channels * self.grid_height * self.grid_width)
         ])
 
-    def forward(self, left_voxel, right_voxel, device):
+    def forward(self, right_voxel, device):
         # 体素特征提取，保持分批处理逻辑
-        max_chunk_batch_size = 40
-        if left_voxel.shape[0] > max_chunk_batch_size:
-            voxel_feature_chunks = []
-            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
-            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
-
-            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
-                lv_chunk = lv_chunk.to(device)
-                rv_chunk = rv_chunk.to(device)
-                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
-                voxel_feature_chunks.append(vf_chunk)
-            
-            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
-        else:
-            left_voxel = left_voxel.to(device)
-            right_voxel = right_voxel.to(device)
-            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
+        right_voxel = right_voxel.to(device)
+        voxel_feature = self.feature_extractor(right_voxel)
 
         # 释放内存
-        del left_voxel, right_voxel
+        del right_voxel
         torch.cuda.empty_cache()
 
         # 提取共享特征

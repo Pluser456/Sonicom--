@@ -129,14 +129,14 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             loss = loss_function(mu, target_y_sel)
         elif model.modelname == "2DResNetClassifier":
             loss_function = nn.CrossEntropyLoss()
-            left_voxel = sample_batch["left_voxel"]
+            # left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
-            pos = sample_batch["position"]
+            # pos = sample_batch["position"]
             # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
             feature = feature.reshape(feature.shape[0], -1)[:, 0]
 
-            pred, logits = model(left_voxel, right_voxel, device=device)
+            pred, logits = model(right_voxel, device=device)
             loss = loss_function(logits, feature)
             accuracy += (pred == feature).float().mean()
 
@@ -158,8 +158,6 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
     model.eval()
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
-
-    auxiliary_batch = next(iter(auxiliary_loader))
     tot_accuracy = torch.zeros(1).to(device)
     data_loader = tqdm(data_loader, file=sys.stdout)
 
@@ -170,6 +168,7 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 right_voxel = sample_batch["right_voxel"]
                 pos = sample_batch["position"]
                 hrtf = sample_batch["hrtf"]
+                auxiliary_batch = next(iter(auxiliary_loader))
 
                 mu, _ = model(left_voxel, right_voxel, pos, hrtf, device=device, is_training=False, auxiliary_data=auxiliary_batch)
 
@@ -178,14 +177,14 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 loss = loss_function(mu, target)
             elif model.modelname == "2DResNetClassifier":
                 loss_function = nn.CrossEntropyLoss()
-                left_voxel = sample_batch["left_voxel"]
+                # left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
-                pos = sample_batch["position"]
+                # pos = sample_batch["position"]
                 # hrtf = sample_batch["hrtf"]
                 feature = sample_batch["feature"]
                 feature = feature.reshape(feature.shape[0], -1)[:, 0]
 
-                preds, logits = model(left_voxel, right_voxel, device=device)
+                preds, logits = model(right_voxel, device=device)
 
                 accuracy = (preds == feature).float().mean()
                 loss = loss_function(logits, feature)

@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 from utils import calculate_hrtf_mean
-from PIL import Image, features
+from PIL import Image
 from torchvision import transforms
 import h5py
 
@@ -23,7 +23,7 @@ class SonicomDataSet(Dataset):
             mode (str): 输出模式 - "left"/"right"/"both"
             positions_chosen_num (int): 每个文件选择的方位数
         """
-        self.hrtf_files = self._validate_hrtf_files(hrtf_files)
+        self.hrtf_files = hrtf_files
         self.mode = mode
         self.status = status
         # self.model = model
@@ -73,8 +73,8 @@ class SonicomDataSet(Dataset):
                 torch.sin(original_position_rad[:, 1])  # sin(elevation)
             ], dim=1)
 
-        left_voxel = self.left_tensor[file_idx, :, :, :]
-        right_voxel = self.right_tensor[file_idx, :, :, :]
+        left_voxel = self.left_tensor[file_idx, :, :, :] if self.left_tensor is not None else None
+        right_voxel = self.right_tensor[file_idx, :, :, :] if self.right_tensor is not None else None
 
         feature = self.feature[file_idx, :] if self.feature is not None else None
         return {
@@ -104,35 +104,51 @@ class SonicomDataSet(Dataset):
         return hrtf
     
     def _get_voxel_tensor(self, left_voxel_path, right_voxel_path):
-        """获取体素张量"""
-        left_tensors = []
-        right_tensors = []
-        for _, (left_path, right_path) in enumerate(zip(left_voxel_path, right_voxel_path)):
-            left_voxel = np.load(left_path)
-            right_voxel = np.load(right_path)
-            right_voxel = np.flip(right_voxel, axis=1).copy()
-            left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.float32).unsqueeze(0)
-            right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0)
-            left_tensors.append(left_voxel_tensor)
-            right_tensors.append(right_voxel_tensor)
-        left_tensors = torch.cat(left_tensors, dim=0).unsqueeze(1)
-        right_tensors = torch.cat(right_tensors, dim=0).unsqueeze(1)
+        """获取体素张量，当某个路径列表为空时，仅对应的张量为 None"""
+        left_tensors = None
+        right_tensors = None
+
+        if left_voxel_path:  # 仅当 left_voxel_path 不为空时才处理
+            left_tensors = []
+            for left_path in left_voxel_path:
+                left_voxel = np.load(left_path)
+                left_voxel_tensor = torch.tensor(left_voxel, dtype=torch.float32).unsqueeze(0)
+                left_tensors.append(left_voxel_tensor)
+            left_tensors = torch.cat(left_tensors, dim=0).unsqueeze(1)
+
+        if right_voxel_path:  # 仅当 right_voxel_path 不为空时才处理
+            right_tensors = []
+            for right_path in right_voxel_path:
+                right_voxel = np.load(right_path)
+                right_voxel = np.flip(right_voxel, axis=1).copy()
+                right_voxel_tensor = torch.tensor(right_voxel, dtype=torch.float32).unsqueeze(0)
+                right_tensors.append(right_voxel_tensor)
+            right_tensors = torch.cat(right_tensors, dim=0).unsqueeze(1)
+
         return left_tensors, right_tensors
     
     def _get_image_tensor(self, left_image_path, right_image_path):
-        """获取图像张量"""
-        left_tensors = []
-        right_tensors = []
-        for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
-            left_image = Image.open(left_path).convert('L')
-            right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
-            left_image_tensor = self.transform(left_image).unsqueeze(0)
-            right_image_tensor = self.transform(right_image).unsqueeze(0)
-            left_tensors.append(left_image_tensor)
-            right_tensors.append(right_image_tensor)
-        left_tensors = torch.cat(left_tensors, dim=0)
-        right_tensors = torch.cat(right_tensors, dim=0)
-        return left_tensors, right_tensors        
+        """获取图像张量，当某个路径列表为空时，仅对应的张量为 None"""
+        left_tensors = None
+        right_tensors = None
+
+        if left_image_path:  # 仅当 left_image_path 不为空时才处理
+            left_tensors = []
+            for left_path in left_image_path:
+                left_image = Image.open(left_path).convert('L')
+                left_image_tensor = self.transform(left_image).unsqueeze(0)
+                left_tensors.append(left_image_tensor)
+            left_tensors = torch.cat(left_tensors, dim=0)
+
+        if right_image_path:  # 仅当 right_image_path 不为空时才处理
+            right_tensors = []
+            for right_path in right_image_path:
+                right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
+                right_image_tensor = self.transform(right_image).unsqueeze(0)
+                right_tensors.append(right_image_tensor)
+            right_tensors = torch.cat(right_tensors, dim=0)
+
+        return left_tensors, right_tensors
         
 
     @staticmethod
@@ -154,8 +170,8 @@ class SonicomDataSet(Dataset):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        left_voxels = torch.stack([item["left_voxel"] for item in batch]) # [B, 1, D, H, W]
-        right_voxels = torch.stack([item["right_voxel"] for item in batch]) # [B, 1, D, H, W]
+        left_voxels = torch.stack([item["left_voxel"] for item in batch]) if batch[0]["left_voxel"] is not None else None
+        right_voxels = torch.stack([item["right_voxel"] for item in batch]) if batch[0]["right_voxel"] is not None else None
         features = torch.stack([item["feature"] for item in batch]) if batch[0]["feature"] is not None else None
         
         return {
