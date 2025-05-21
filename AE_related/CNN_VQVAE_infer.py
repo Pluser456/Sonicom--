@@ -19,7 +19,7 @@ def main():
     current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "best_model.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    usediff = False  # 是否使用差值HRTF数据
+    usediff = True  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
@@ -68,8 +68,8 @@ def main():
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-vqvae-30oyy.pth", map_location=device,weights_only=True))
-    print("Load HRTF encoder from", "HRTFAEweights/model-vqvae-30oyy.pth")
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-rvqvae-180.pth", map_location=device,weights_only=True))
+    print("Load HRTF encoder from", "HRTFAEweights/model-rvqvae-180.pth")
 
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
@@ -82,7 +82,7 @@ def main():
         calc_mean=True,
         status="test", # 因为这里希望坐标是按顺序输入的
         inputform=inputform,
-        mode="left"
+        mode="right"
     )
     
     test_dataset = SonicomDataSet(
@@ -92,7 +92,7 @@ def main():
         calc_mean=False,
         status="test",
         inputform=inputform,
-        mode="left",
+        mode="right",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
@@ -122,7 +122,7 @@ def main():
     hrtf_encoder.eval()
     with torch.no_grad():
         criterion = nn.MSELoss()
-        progressbar = tqdm(test_loader)
+        progressbar = tqdm(train_loader)
         total_loss = 0
         size = 0
         for i, batch in enumerate(progressbar):
@@ -130,8 +130,8 @@ def main():
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
             pred, _ = model(right_picture, device=device) # [batch_size, 18]
-            pred = pred.reshape(-1, 2, 3, 3)
-            pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
+            pred = pred.reshape(-1, 3, 3)
+            # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
             # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
             zq = hrtf_encoder.vq_layer.get_output_from_indices(pred)
             output = hrtf_encoder.decoder(zq, pos)

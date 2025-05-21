@@ -469,7 +469,7 @@ class ResNet2DClassifier(nn.Module):
         self.shared_fc = nn.Sequential(*shared_layers)
         
         # 定义输出网格大小
-        self.total_positions = 18  # 总共18个分类头
+        self.total_positions = 9  # 总共6个分类头
         self.num_classes = 256  # 每个分类头的类别数量
         
         # 为每个位置创建独立的分类头，每个头都是一个MLP
