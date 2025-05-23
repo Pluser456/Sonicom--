@@ -313,17 +313,17 @@ class TestNet(nn.Module):
         self.net = nn.Sequential(self.fc0, self.fc1, self.fc2, self.fc3, self.fc4)
         
         self.imgfc = nn.Sequential(
-            linear_block(512, 256),  # 保持输入维度1024 = 512 * 2
+            linear_block(1024, 256),  # 保持输入维度1024 = 512 * 2
             linear_block(256, 256),
         )
         self.output = nn.Linear(256+64, 108)
         self.last = nn.Linear(108, 1)  # 输出单频率
 
-    def forward(self,  image_right, pos):
+    def forward(self, image_left, image_right, pos):
         # 处理左视图
-        # x_left = image_left.squeeze(2)  # 去除多余的维度 [batch,1,1,H,W] -> [batch,1,H,W]
-        # x_left = self.dim_adapter(x_left)
-        # img_feat_left = self.conv_net(x_left)
+        x_left = image_left.squeeze(2)  # 去除多余的维度 [batch,1,1,H,W] -> [batch,1,H,W]
+        x_left = self.dim_adapter(x_left)
+        img_feat_left = self.conv_net(x_left)
         
         # 处理右视图
         x_right = image_right.squeeze(2)
@@ -331,7 +331,7 @@ class TestNet(nn.Module):
         img_feat_right = self.conv_net(x_right)
         
         # 合并特征
-        img_feat = img_feat_right
+        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)
         img_feat = self.imgfc(img_feat)
         
         # 位置特征处理

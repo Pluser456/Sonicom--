@@ -25,11 +25,10 @@ def main(args,target_index):
         os.makedirs("./weights")
 
     tb_writer = SummaryWriter()
-    image_dir = "Ear_image_gray_Wi"
+    image_dir = "Ear_image_gray"
     hrtf_dir = "FFT_HRTF"
-    inputform = "image"
 
-    dataset_paths = split_dataset(image_dir, hrtf_dir,inputform=inputform)
+    dataset_paths = split_dataset(image_dir, hrtf_dir)
     # 获取各个数据集
     train_hrtf_list = dataset_paths['train_hrtf_list']
     test_hrtf_list = dataset_paths['test_hrtf_list']

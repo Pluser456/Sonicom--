@@ -74,7 +74,7 @@ class SonicomDataSet(Dataset):
                     torch.sin(original_position_rad[:, 1])  # sin(elevation)
                 ], dim=1)
 
-            # left_image = self.left_tensor[file_idx, :, :, :]
+            left_image = self.left_tensor[file_idx, :, :, :]
             right_image = self.right_tensor[file_idx, :, :, :]
         else:
             file_idx = idx // self.positions_per_subject
@@ -92,13 +92,13 @@ class SonicomDataSet(Dataset):
                     torch.sin(original_position_rad[1])  # sin(elevation)
                 ])
 
-            # left_image = self.left_tensor[file_idx, :, :, :]
+            left_image = self.left_tensor[file_idx, :, :, :]
             right_image = self.right_tensor[file_idx, :, :, :]
 
         return {
             "hrtf": hrtf,
             "position": position,
-            "left_image": [],
+            "left_image": left_image,
             "right_image": right_image,
         }
         
@@ -119,22 +119,23 @@ class SonicomDataSet(Dataset):
             right_hrtf = torch.tensor(right_data).type(torch.float32)
             hrtf = torch.cat([left_hrtf, right_hrtf], dim=1)
         return hrtf
-
+    
+    
     def _get_image_tensor(self, left_image_path, right_image_path):
         """获取图像张量"""
         left_tensors = []
         right_tensors = []
-        for right_path in right_image_path:
-            # left_image = Image.open(left_path).convert('L')
+        for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
+            left_image = Image.open(left_path).convert('L')
             right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
-            # left_image_tensor = self.transform(left_image).unsqueeze(0)
+            left_image_tensor = self.transform(left_image).unsqueeze(0)
             right_image_tensor = self.transform(right_image).unsqueeze(0)
-            # left_tensors.append(left_image_tensor)
+            left_tensors.append(left_image_tensor)
             right_tensors.append(right_image_tensor)
-        # left_tensors = torch.cat(left_tensors, dim=0)
+        left_tensors = torch.cat(left_tensors, dim=0)
         right_tensors = torch.cat(right_tensors, dim=0)
         return left_tensors, right_tensors
-
+    
     def turn_auxiliary_mode(self, mode: bool):
         """切换为辅助测试集模式"""
         if mode:
@@ -162,13 +163,13 @@ class SonicomDataSet(Dataset):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        # left_images = torch.stack([item["left_image"] for item in batch]).unsqueeze(1)
+        left_images = torch.stack([item["left_image"] for item in batch]).unsqueeze(1)
         right_images = torch.stack([item["right_image"] for item in batch]).unsqueeze(1)
         
         return {
             "hrtf": hrtfs,
             "position": positions,
-            "left_image": [],
+            "left_image": left_images,
             "right_image": right_images
         }
     
