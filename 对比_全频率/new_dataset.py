@@ -171,7 +171,7 @@ class SonicomDataSet(Dataset):
             "left_image": [],
             "right_image": right_images
         }
-    
+   
 class SingleSubjectDataSet(SonicomDataSet):
     """单个受试者的数据集"""
     def __init__(
@@ -204,13 +204,13 @@ class SingleSubjectDataSet(SonicomDataSet):
         # 只保留目标受试者的数据
         target_idx = subject_id - 1
         single_hrtf = [hrtf_files[target_idx]]
-        single_left = [left_images[target_idx]]
+        # single_left = [left_images[target_idx]]
         single_right = [right_images[target_idx]]
 
         # 调用父类初始化
         super().__init__(
             hrtf_files=single_hrtf,
-            left_images=single_left,
+            left_images=[],
             right_images=single_right,
             transform=transform,
             calc_mean=False,
@@ -245,7 +245,7 @@ class SingleSubjectDataSet(SonicomDataSet):
                 torch.sin(original_position_rad[:, 1])  # sin(elevation)
             ], dim=1)
 
-            left_img = self.left_tensor[0, :, :, :]
+            # left_img = self.left_tensor[0, :, :, :]
             right_img = self.right_tensor[0, :, :, :]
             # 获取训练集对应的均值，注意是训练集！
             # 同时获取原始HRTF
@@ -273,7 +273,7 @@ class SingleSubjectDataSet(SonicomDataSet):
             "hrtf": hrtf,
             "meanlog": mean_value,
             "position": position,
-            "left_image": left_img,
+            "left_image": [],
             "right_image": right_img
         }
     
@@ -282,14 +282,14 @@ class SingleSubjectDataSet(SonicomDataSet):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        left_images = torch.stack([item["left_image"] for item in batch])
+        # left_images = torch.stack([item["left_image"] for item in batch])
         right_images = torch.stack([item["right_image"] for item in batch])
         meanlog = torch.stack([item["meanlog"] for item in batch])
         
         return {
             "hrtf": hrtfs,
             "position": positions,
-            "left_image": left_images,
+            "left_image": [],
             "right_image": right_images,
             "meanlog": meanlog
         }
