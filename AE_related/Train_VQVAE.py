@@ -14,17 +14,16 @@ from new_dataset import OnlyHRTFDataSet
 from utils import split_dataset
 from AE import HRTF_VQVAE
 
-weightname = ".pth"
+weightname = "jlj"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 log_dir = "./runs/HRTF_VQVAE_TransformerDecoder_compact" # <--- TensorBoard 日志目录
-usediff = False  # 是否使用差值HRTF数据
+usediff = True  # 是否使用差值HRTF数据
 
 weightdir = "./HRTFAEweights"
 ear_dir = "Ear_image_gray_Wi"
 if os.path.exists(weightdir) is False:
     os.makedirs(weightdir)
 modelpath = f"{weightdir}/{weightname}"
-positions_chosen_num = 793
 inputform = "image"
 
 dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
@@ -41,13 +40,13 @@ train_dataset = OnlyHRTFDataSet(
     use_diff=usediff,
     calc_mean=True,
     status="test", # 因为这里希望坐标是按顺序输入的
-    mode="left"
+    mode="right"
 )
 test_dataset = OnlyHRTFDataSet(
     dataset_paths["test_hrtf_list"],
     calc_mean=False,
     status="test",
-    mode="left",
+    mode="right",
     use_diff=usediff,
     provided_mean_left=train_dataset.log_mean_hrtf_left,
     provided_mean_right=train_dataset.log_mean_hrtf_right
@@ -64,7 +63,7 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=20,
+    batch_size=1,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
@@ -87,12 +86,15 @@ model = HRTF_VQVAE(
     decoder_mlp_hidden_dims=decoder_mlp_layers
 ).to(device)
 
+if os.path.exists(modelpath):
+    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    print("Load model from", modelpath)
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
 optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
-num_epochs = 30
-scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=3, num_training_steps=num_epochs)
+num_epochs = 180
+scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=18, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
 writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
@@ -135,7 +137,7 @@ for epoch in range(num_epochs):
     writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
     writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
     writer.add_scalar("activity", activity, epoch)
-    # print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
+    print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
 
     # --- 验证循环 (可选) ---
     model.eval()
@@ -169,7 +171,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/model-vqvae-{epoch+1}")
+        torch.save(model.state_dict(), f"{weightdir}/model-rvqvae-{epoch+1}.pth")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")

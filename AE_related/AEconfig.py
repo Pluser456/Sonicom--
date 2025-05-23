@@ -30,7 +30,7 @@ encoder_out_vec_num = 3
 # d_model (hrtf_row_width=108) 必须能被 num_heads 整除
 transformer_encoder_settings = {
     "num_heads": 6,             # 例如 2, 3, 4, 6, 9, 12 (108 % num_heads == 0)
-    "num_encoder_layers": 8,
+    "num_encoder_layers": 8, # 15
     "dim_feedforward": 512,     # 通常是 d_model 的 2-4 倍
     "dropout": 0.05
 }

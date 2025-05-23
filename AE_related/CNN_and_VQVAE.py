@@ -21,7 +21,7 @@ def main():
     current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    usediff = False  # 是否使用差值HRTF数据
+    usediff = True  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
@@ -47,7 +47,7 @@ def main():
         inputform = "voxel"
     elif current_model == "2DResNet":
         weightdir = "./CNNweights"
-        ear_dir = "Ear_image_gray"
+        ear_dir = "Ear_image_gray_Wi"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
@@ -62,9 +62,9 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
-    
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=True, status="test",mode="left")
+    dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=True, status="test",mode="right")
 
 
     # 创建数据集
@@ -75,11 +75,11 @@ def main():
         use_diff=usediff,
         calc_mean=True,
         inputform=inputform,
-        mode="left",
+        mode="right",
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="left", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="right", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -90,12 +90,11 @@ def main():
         calc_mean=False,
         status="test",
         inputform=inputform,
-        mode="left",
+        mode="right",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right,
         provided_feature=test_feature
-
     )
     # 创建数据加载器
     train_loader = DataLoader(
@@ -176,8 +175,8 @@ def get_hrtf_feature(hrtf_files,
     commitment_cost=commitment_cost_beta,
     pos_dim_per_row=pos_dim_for_each_row,
     decoder_mlp_hidden_dims=decoder_mlp_layers
-).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-vqvae-300-usediff.pth", map_location=device,weights_only=True))
+    ).to(device)
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-rvqvae-180.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
@@ -185,13 +184,13 @@ def get_hrtf_feature(hrtf_files,
     with torch.no_grad():
         for batch in tqdm(dataloader, file=sys.stdout):
             hrtf = batch["hrtf"].to(device).unsqueeze(1)
-            hrtf_feature = hrtf_encoder.encoder(hrtf)
+            pos = batch["position"].to(device)
+            hrtf_feature = hrtf_encoder.encoder(hrtf, pos)
             _, idx, _ = hrtf_encoder.vq_layer(hrtf_feature)
             hrtf_data.append(idx)
-    hrtf_data = torch.cat(hrtf_data, dim=1)
-    hrtf_data = hrtf_data.permute((1,0,2,3))
+    hrtf_data = torch.cat(hrtf_data, dim=0)
+    # hrtf_data = hrtf_data.permute((1,0,2,3))
     return hrtf_data
-            
 
 if __name__ == "__main__":
     main()
