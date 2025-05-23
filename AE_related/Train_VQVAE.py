@@ -28,6 +28,13 @@ positions_chosen_num = 793
 inputform = "image"
 
 dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+train_hrtf_list = dataset_paths['train_hrtf_list']
+test_hrtf_list = dataset_paths['test_hrtf_list']
+left_train = dataset_paths['left_train']
+right_train = dataset_paths['right_train']
+left_test = dataset_paths['left_test']
+right_test = dataset_paths['right_test']
+
 
 train_dataset = OnlyHRTFDataSet(
     dataset_paths["train_hrtf_list"],
