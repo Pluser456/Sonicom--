@@ -20,14 +20,10 @@ class FeatureExtractor(nn.Module):
         )
 
 
-    def forward(self, voxel_left, voxel_right):
-        # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
+    def forward(self, voxel_right):
         img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
 
-        # 拼接图像特征
-        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
-        return self.imgfc(img_feat)  # [batch, 256]
+        return img_feat_right  # [batch, 256]
 
 class FeatureExtractor2D(nn.Module):
     """图像特征提取网络"""
@@ -520,3 +516,85 @@ class ResNet2DClassifier(nn.Module):
         predictions = torch.argmax(stacked_logits, dim=1)  # [batch_size, total_positions]
 
         return predictions, stacked_logits
+    
+class ResNet3DClassifier(nn.Module):
+    """修改为多头分类网络，每个位置使用独立的分类头，基于3D特征提取器"""
+    modelname = "3DResNetClassifier"
+    def __init__(self, total_positions=18, num_classes=256):
+        super(ResNet3DClassifier, self).__init__()
+        # FeatureExtractor() 输出维度为 1000
+        img_feature_dim = 1000 
+        self.feature_extractor = FeatureExtractor() # 使用3D特征提取器
+        
+        # 共享的特征提取层
+        shared_layers = []
+        # 参考 ResNet2DClassifier 的 shared_hidden_dims, 根据 img_feature_dim 调整
+        shared_hidden_dims = [512, 384, 256] 
+        current_dim = img_feature_dim
+
+        # 第一个隐藏层
+        first_hidden_dim = shared_hidden_dims[0]
+        shared_layers.append(ResidualBlock(current_dim, first_hidden_dim, use_batchnorm=False))
+        current_dim = first_hidden_dim
+
+        # 后续隐藏层: 使用 ResidualBlock
+        for i in range(1, len(shared_hidden_dims)):
+            current_hidden_dim = shared_hidden_dims[i]
+            shared_layers.append(ResidualBlock(current_dim, current_hidden_dim, use_batchnorm=True))
+            current_dim = current_hidden_dim
+        
+        # 共享特征提取网络
+        self.shared_fc = nn.Sequential(*shared_layers)
+        
+        # 定义输出网格大小
+        self.total_positions = total_positions
+        self.num_classes = num_classes
+        
+        # 为每个位置创建独立的分类头，每个头都是一个MLP
+        self.classifier_heads = nn.ModuleList()
+        # current_dim 是共享特征的输出维度 (即 shared_hidden_dims 最后一个元素)
+        head_input_dim = current_dim  
+        for _ in range(self.total_positions):
+            head_layers = []
+            # 参考 ResNet2DClassifier 的 head_hidden_dims
+            head_hidden_dims = [512, 384, 256] 
+            
+            current_head_dim = head_input_dim
+            for dim in head_hidden_dims:
+                head_layers.append(ResidualBlock(current_head_dim, dim, use_batchnorm=True))
+                current_head_dim = dim
+            
+            # 添加最终的分类层
+            head_layers.append(nn.Linear(current_head_dim, self.num_classes))
+            
+            self.classifier_heads.append(nn.Sequential(*head_layers))
+
+    def forward(self, right_voxel, device):
+        # 体素特征提取
+        right_voxel = right_voxel.to(device)
+        voxel_feature = self.feature_extractor(right_voxel)
+
+        # 释放内存
+        del right_voxel
+        torch.cuda.empty_cache()
+
+        # 提取共享特征
+        shared_features = self.shared_fc(voxel_feature) # [batch_size, shared_feature_dim]
+        
+        # 为每个位置进行分类预测
+        logits_list = []
+        for i in range(self.total_positions):
+            head_output = self.classifier_heads[i](shared_features)  # [batch_size, num_classes]
+            logits_list.append(head_output)
+            
+        # 将所有头的输出堆叠 [batch_size, total_positions, num_classes]
+        stacked_logits = torch.stack(logits_list, dim=1)
+        
+        # 调整维度顺序为 [batch_size, num_classes, total_positions]，以匹配 ResNet2DClassifier 的输出格式
+        permuted_logits = stacked_logits.permute(0, 2, 1)
+        
+        # 在每个分类头上获取预测类别
+        # argmax 在 permuted_logits 的类别维度 (dim=1) 上操作
+        predictions = torch.argmax(permuted_logits, dim=1)  # [batch_size, total_positions]
+
+        return predictions, permuted_logits

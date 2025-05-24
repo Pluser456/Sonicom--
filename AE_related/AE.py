@@ -316,17 +316,17 @@ class HRTF_VQVAE(nn.Module):
         # self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
 
         # self.vq_layer = FSQ(levels=[8, 8, 8])
-        # self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
-        #                                     kmeans_init = True,   # set to True
-        #                                     kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-        #                                     commitment_weight = commitment_cost, # commitment cost
-        #                                     )
+        self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
+                                            kmeans_init = True,   # set to True
+                                            kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+                                            commitment_weight = commitment_cost, # commitment cost
+                                            )
         
-        self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3,
-                                    kmeans_init = True,   # set to True
-                                    kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-                                    commitment_weight = commitment_cost, # commitment cost
-                                    )
+        # self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3,
+        #                             kmeans_init = True,   # set to True
+        #                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+        #                             commitment_weight = commitment_cost, # commitment cost
+        #                             )
                                                     
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
