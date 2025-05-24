@@ -16,8 +16,8 @@ from AE import HRTF_VQVAE
 
 weightname = "jlj"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-log_dir = "./runs/HRTF_VQVAE_TransformerDecoder_compact" # <--- TensorBoard 日志目录
-usediff = True  # 是否使用差值HRTF数据
+log_dir = "./runs/HRTF_VQVAE" # <--- TensorBoard 日志目录
+usediff = False  # 是否使用差值HRTF数据
 
 weightdir = "./HRTFAEweights"
 ear_dir = "Ear_image_gray_Wi"
@@ -38,7 +38,7 @@ right_test = dataset_paths['right_test']
 train_dataset = OnlyHRTFDataSet(
     dataset_paths["train_hrtf_list"],
     use_diff=usediff,
-    calc_mean=True,
+    calc_mean=usediff,
     status="test", # 因为这里希望坐标是按顺序输入的
     mode="right"
 )
@@ -73,7 +73,7 @@ test_loader = DataLoader(
 
 
 from AEconfig import transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, num_codebook_embeddings, commitment_cost_beta
+    pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, num_codebook_embeddings, commitment_cost_beta,num_quantizers
 
 model = HRTF_VQVAE(
     hrtf_row_width=width_per_hrtf_row,
@@ -83,7 +83,7 @@ model = HRTF_VQVAE(
     num_embeddings=num_codebook_embeddings,
     commitment_cost=commitment_cost_beta,
     pos_dim_per_row=pos_dim_for_each_row,
-    decoder_mlp_hidden_dims=decoder_mlp_layers
+    num_quantizers=num_quantizers
 ).to(device)
 
 if os.path.exists(modelpath):
@@ -93,10 +93,10 @@ print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requir
 
 optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
-num_epochs = 180
-scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=18, num_training_steps=num_epochs)
+num_epochs = 120
+scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=6, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
-writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_dec_{str(decoder_mlp_layers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
+writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
 for epoch in range(num_epochs):
     model.train()
@@ -171,7 +171,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/model-rvqvae-{epoch+1}.pth")
+        torch.save(model.state_dict(), f"{weightdir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{time.strftime('%m%d-%H%M')}.pth")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")

@@ -294,7 +294,7 @@ class HRTF_VQVAE(nn.Module):
                  num_embeddings, 
                  commitment_cost,
                  pos_dim_per_row,
-                 decoder_mlp_hidden_dims
+                 num_quantizers=3,
                  ): 
         super().__init__()
         
@@ -322,7 +322,7 @@ class HRTF_VQVAE(nn.Module):
                                             commitment_weight = commitment_cost, # commitment cost
                                             )
         
-        # self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3,
+        # self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=num_quantizers,
         #                             kmeans_init = True,   # set to True
         #                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
         #                             commitment_weight = commitment_cost, # commitment cost

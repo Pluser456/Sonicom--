@@ -12,13 +12,13 @@ import sys
 from torch.utils.tensorboard import SummaryWriter
 from AE import HRTF_VQVAE
 from AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    num_codebook_embeddings, commitment_cost_beta
+    num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, encoder_out_vec_num, \
+    num_codebook_embeddings, commitment_cost_beta, num_quantizers
 import time
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
@@ -73,7 +73,7 @@ def main():
         dataset_paths["left_train"],
         dataset_paths["right_train"],
         use_diff=usediff,
-        calc_mean=True,
+        calc_mean=usediff,
         inputform=inputform,
         mode="left",
         provided_feature=train_feature
@@ -113,13 +113,13 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=2,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.85) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.85) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
@@ -128,7 +128,7 @@ def main():
     patience = 30  # 早停的容忍次数
     patience_counter = 0
     log_dir = f"runs/{current_model}"
-    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_3DResNet{time.strftime('%m%d-%H%M')}")
+    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{time.strftime('%m%d-%H%M')}")
 
     for epoch in range(0, num_epochs + 1):
         # 训练
@@ -174,7 +174,7 @@ def get_hrtf_feature(hrtf_files,
     num_embeddings=num_codebook_embeddings,
     commitment_cost=commitment_cost_beta,
     pos_dim_per_row=pos_dim_for_each_row,
-    decoder_mlp_hidden_dims=decoder_mlp_layers
+    num_quantizers=num_quantizers,
     ).to(device)
     hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-vqvae-30oyy.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
