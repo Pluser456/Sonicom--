@@ -113,7 +113,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index =
         # imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         # mark
-        target = sample_batch["hrtf"].squeeze(1)[:, : , target_index].to(device)
+        target = sample_batch["hrtf"].squeeze(1)[:, : , :].to(device)
         # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
         target = target.reshape(-1, 1)
         
@@ -122,6 +122,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, target_index =
 
         # 前向传播
         output = model(imageright, pos)  # Updated to include imageright
+        output = output.reshape(-1, 1)
         loss = loss_function(output, target)
         accu_loss += loss.detach() # detach() 防止梯度传播
         
@@ -151,13 +152,14 @@ def evaluate(model, data_loader, device, epoch, target_index = 50):
         imageright = sample_batch["right_image"].to(device)
         pos = sample_batch["position"].squeeze().to(device)
         # mark
-        target = sample_batch["hrtf"].squeeze(1)[:, : , target_index].to(device)
+        target = sample_batch["hrtf"].squeeze(1)[:, : , :].to(device)
         # target = sample_batch["hrtf"].squeeze(1)[:, :].to(device)
         target = target.reshape(-1, 1)
         
 
         # 前向传播
         output = model(imageright, pos)
+        output = output.reshape(-1, 1)
         # output = model(imageleft, pos)
         loss = loss_function(output, target)
         accu_loss += loss.detach()  # detach() 防止梯度传播

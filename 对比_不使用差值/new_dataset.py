@@ -11,7 +11,8 @@ class SonicomDataSet(Dataset):
     """人耳图像数据集"""
     def __init__(self, hrtf_files: list, left_images: list, right_images: list, device,
                  status="train",
-                 transform=None,  calc_mean=True, mode="both", provided_mean_left=None, 
+                 transform=None,  calc_mean=True, use_diff=False,
+                 mode="both", provided_mean_left=None, 
                  provided_mean_right=None):
         """
         Args:
@@ -48,6 +49,7 @@ class SonicomDataSet(Dataset):
         # 获取方位数
         with h5py.File(self.hrtf_files[0], 'r') as f:
             self.positions_per_subject = f["F_left"].shape[0]
+        self.use_diff = use_diff  # 是否使用当前HRTF和平均HRTF之间的差值作为预测目标
 
     def __len__(self):
         if self.status =="train":
@@ -107,19 +109,19 @@ class SonicomDataSet(Dataset):
         if self.mode == "left":
             hrtf_data = data["F_left"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_left[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         elif self.mode == "right":
             hrtf_data = data["F_right"][position_idx, :]
             mean_hrtf = self.log_mean_hrtf_right[position_idx, :]
-            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+            hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         else:  # both
             left_data = 20 * np.log10(data["F_left"][position_idx, :]) - self.log_mean_hrtf_left[position_idx, :]
             right_data = 20 * np.log10(data["F_right"][position_idx, :]) - self.log_mean_hrtf_right[position_idx, :]
-            left_hrtf = torch.tensor(left_data).type(torch.float32)
-            right_hrtf = torch.tensor(right_data).type(torch.float32)
+            left_hrtf = torch.tensor(left_data).type(torch.float32) if self.use_diff else torch.tensor(left_data).type(torch.float32)
+            right_hrtf = torch.tensor(right_data).type(torch.float32) if self.use_diff else torch.tensor(right_data).type(torch.float32)
             hrtf = torch.cat([left_hrtf, right_hrtf], dim=1)
         return hrtf
-
+    
     def _get_image_tensor(self, left_image_path, right_image_path):
         """获取图像张量"""
         left_tensors = []
@@ -171,7 +173,7 @@ class SonicomDataSet(Dataset):
             "left_image": [],
             "right_image": right_images
         }
-    
+   
 class SingleSubjectDataSet(SonicomDataSet):
     """单个受试者的数据集"""
     def __init__(
@@ -204,13 +206,13 @@ class SingleSubjectDataSet(SonicomDataSet):
         # 只保留目标受试者的数据
         target_idx = subject_id - 1
         single_hrtf = [hrtf_files[target_idx]]
-        single_left = [left_images[target_idx]]
+        # single_left = [left_images[target_idx]]
         single_right = [right_images[target_idx]]
 
         # 调用父类初始化
         super().__init__(
             hrtf_files=single_hrtf,
-            left_images=single_left,
+            left_images=[],
             right_images=single_right,
             transform=transform,
             calc_mean=False,
@@ -245,7 +247,7 @@ class SingleSubjectDataSet(SonicomDataSet):
                 torch.sin(original_position_rad[:, 1])  # sin(elevation)
             ], dim=1)
 
-            left_img = self.left_tensor[0, :, :, :]
+            # left_img = self.left_tensor[0, :, :, :]
             right_img = self.right_tensor[0, :, :, :]
             # 获取训练集对应的均值，注意是训练集！
             # 同时获取原始HRTF
@@ -273,7 +275,7 @@ class SingleSubjectDataSet(SonicomDataSet):
             "hrtf": hrtf,
             "meanlog": mean_value,
             "position": position,
-            "left_image": left_img,
+            "left_image": [],
             "right_image": right_img
         }
     
@@ -282,14 +284,14 @@ class SingleSubjectDataSet(SonicomDataSet):
         """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
         positions = torch.stack([item["position"] for item in batch])
-        left_images = torch.stack([item["left_image"] for item in batch])
+        # left_images = torch.stack([item["left_image"] for item in batch])
         right_images = torch.stack([item["right_image"] for item in batch])
         meanlog = torch.stack([item["meanlog"] for item in batch])
         
         return {
             "hrtf": hrtfs,
             "position": positions,
-            "left_image": left_images,
+            "left_image": [],
             "right_image": right_images,
             "meanlog": meanlog
         }

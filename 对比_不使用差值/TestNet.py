@@ -317,7 +317,7 @@ class TestNet(nn.Module):
             linear_block(256, 256),
         )
         self.output = nn.Linear(256+64, 108)
-        self.last = nn.Linear(108, 1)  # 输出单频率
+        self.last = nn.Linear(108, 90)  # 输出单频率
 
     def forward(self,  image_right, pos):
         # 处理左视图

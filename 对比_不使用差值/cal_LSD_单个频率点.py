@@ -17,9 +17,9 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 # model_path = "123"
 
-Freq_Num = 108
+Freq_Num = 90
 
-def evaluate_one_hrtf(model, test_loader, device, target_index = 50):
+def evaluate_one_hrtf(model, test_loader, device):
     model.eval()
 
     all_preds = []
@@ -29,7 +29,7 @@ def evaluate_one_hrtf(model, test_loader, device, target_index = 50):
     with torch.no_grad():
         for batch in test_loader:
             # 数据迁移到设备
-            imageleft = batch["left_image"].to(device) #[batch, 3, 224, 224]
+            # imageleft = batch["left_image"].to(device) #[batch, 3, 224, 224]
             imageright = batch["right_image"].to(device)
             position = batch["position"].squeeze(1).to(device) #[batch, 2]
             # mark
@@ -37,27 +37,23 @@ def evaluate_one_hrtf(model, test_loader, device, target_index = 50):
             # targets = batch["hrtf"].squeeze(1)[:,:].unsqueeze(-1).to(device)  # [batch]
             # meanloghrtf = batch["meanlog"].unsqueeze(-1)[:, :].to(device)  # [batch]
             targets = batch["hrtf"]
-            targets = targets[:, :, target_index]  # 形状变为 [1, 793]
-            targets = targets.squeeze(0).unsqueeze(-1).to(device)  # 最终形状 [793, 1]
+            targets = targets[:, :, :]  # 形状变为 [1, 793]
+            targets = targets.squeeze(0).to(device)  # 最终形状 [793, 1]
             # targets = targets.squeeze(1)[:, : , target_index].to(device)
             # targets = targets.reshape(-1, 1)
             # meanloghrtf = batch["meanlog"].unsqueeze(1)[:, :,target_index].to(device)  # [batch]
-          
-            meanloghrtf = batch["meanlog"]
-            meanloghrtf = meanloghrtf[:, :, target_index]  # 形状变为 [1, 793]
-            meanloghrtf = meanloghrtf.squeeze(0).unsqueeze(-1).to(device) 
-
+        
 
             # 前向传播
             # outputs = model(imageleft,imageright, position)  # [batch]
-            outputs = model(imageleft, imageright, position)  # [batch]
+            outputs = model(imageright, position)  # [batch]
 
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
             # 转换到对数域 (dB)
             log_target = 20 * torch.log10(targets)
-            pred = torch.abs(outputs + meanloghrtf)
+            pred = torch.abs(outputs)
             log_target = torch.abs(log_target)
 
             # 将当前batch的结果添加到列表
@@ -74,13 +70,12 @@ def evaluate_one_hrtf(model, test_loader, device, target_index = 50):
     return final_preds, final_targets
     # return all_preds, all_targets
 
-def main(args,target_index):
+def main(args):
     print("------------------------------------------------")
-    print(f"Evaluating{target_index}")
     # 2. 模型和训练配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = create_model().to(device)  # 使用之前定义的网络结构
-    model_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model9999-freq{target_index}.pth"
+    model_path = f"D:\大学\大三下\大创项目\Sonicom--2d\weights\model1.pth"
 
     # 如果需要加载预训练模型
     if os.path.exists(model_path):
@@ -92,10 +87,11 @@ def main(args,target_index):
     pred_list = []
     true_list = []
 
-    image_dir = "Ear_image_gray"
-    hrtf_dir = "FFT_HRTF"
+    image_dir = "Ear_image_gray_Wi"
+    hrtf_dir = "FFT_HRTF_Wi"
+    inputform = "image"
 
-    dataset_paths = split_dataset(image_dir, hrtf_dir)
+    dataset_paths = split_dataset(image_dir, hrtf_dir,inputform=inputform)
     # 获取各个数据集
     train_hrtf_list = dataset_paths['train_hrtf_list']
     test_hrtf_list = dataset_paths['test_hrtf_list']
@@ -125,7 +121,7 @@ def main(args,target_index):
                                    left_images=left_train,
                                    right_images=right_train,
                                    transform=data_transform["train"],
-                                   mode="left",
+                                   mode="right",
                                    device=device
 
                                    )
@@ -135,9 +131,9 @@ def main(args,target_index):
     log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
     batch_size = args.batch_size
-    nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4])  # 加载数据所用进程数，若大于1需要时间准备进程，不是越大越好
+    # nw = min([os.cpu_count(), batch_size if batch_size > 1 else 0, 4])  # 加载数据所用进程数，若大于1需要时间准备进程，不是越大越好
 
-    for hrtfid in range(1, len(left_test) + 1):  # 选择计算第几个HRTF的LSD
+    for hrtfid in range(1, len(right_test) + 1):  # 选择计算第几个HRTF的LSD
         val_dataset = SingleSubjectDataSet(hrtf_files=test_hrtf_list,
                                            left_images=left_test,
                                            right_images=right_test,
@@ -156,7 +152,7 @@ def main(args,target_index):
                                                  num_workers=0,
                                                  collate_fn=val_dataset.collate_fn
                                                  )
-        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, dataloader,device , target_index=target_index)
+        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, dataloader,device)
         pred_list.append(pred_log_hrtf)
         true_list.append(true_log_hrtf.squeeze(1))  # mark
         lsd = torch.sqrt(torch.mean((pred_log_hrtf - true_log_hrtf) ** 2)).item()
@@ -167,9 +163,9 @@ def main(args,target_index):
     pred_tensor = torch.stack(pred_list, dim=0)
     true_tensor = torch.stack(true_list, dim=0)
 
-    freq_list = np.linspace(0, 1, 1)  # 获取频率列表
-    freq_list = 48000 / 256 * freq_list  # 计算频率值
-    # 存储每个频率点的平均LSD mark
+    # freq_list = np.linspace(0, 1, 1)  # 获取频率列表
+    # freq_list = 48000 / 256 * freq_list  # 计算频率值
+    # # 存储每个频率点的平均LSD mark
     # avg_lsd_per_freq = np.zeros(len(freq_list))
     # for freq_idx in range(len(freq_list)):
     #     # 计算平均LSD
@@ -179,13 +175,13 @@ def main(args,target_index):
     print("\n-----------------contrast with mean HRTF-----------------\n")
     res_list_mean = []
     # 将均值转为tensor
-    log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left[:, target_index]), dtype=torch.float32).to(device)
-    log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0)  # 添加batch维度
+    log_mean_hrtf_right = torch.tensor(np.abs(log_mean_hrtf_right[:, target_index]), dtype=torch.float32).to(device)
+    log_mean_hrtf_right = log_mean_hrtf_right.unsqueeze(0)  # 添加batch维度
 
-    for hrtfid in range(1, len(left_test) + 1):
+    for hrtfid in range(1, len(right_test) + 1):
         # 之前已经计算预测HRTF和真实HRTF之间LSD，
         # 现在计算平均HRTF和真实HRTF之间LSD
-        lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid - 1, :]) ** 2)).item()
+        lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_right - true_tensor[hrtfid - 1, :]) ** 2)).item()
         res_list_mean.append(lsd_of_mean)
         print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
 
@@ -229,15 +225,17 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
+    main(args)
+    
     lsd_predicted = []
     lsd_mean = []
     for target_index in range(Freq_Num):
         predicted, mean = main(args, target_index)
-        lsd_predicted.append(predicted)
-        lsd_mean.append(mean)
+        lsd_predicted.append(predicted**2)
+        lsd_mean.append(mean**2)
         
-    print(f"平均预测LSD{np.mean(lsd_predicted)}")
-    print(f"平均LSD{np.mean(lsd_mean)}")
+    print(f"平均预测LSD{np.sqrt(np.mean(lsd_predicted))}")
+    print(f"平均LSD{np.sqrt(np.mean(lsd_mean))}")
 
 
     # 创建画布
