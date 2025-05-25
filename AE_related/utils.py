@@ -119,6 +119,15 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             target_y_sel = target_y_sel.to(device)
 
             loss = loss_function(mu, target_y_sel)
+        elif model.modelname == "3DResNetClassifier":
+            loss_function = nn.CrossEntropyLoss()
+            right_voxel = sample_batch["right_voxel"]
+            feature = sample_batch["feature"]
+            feature = feature.reshape(feature.shape[0], -1)[:, 0]
+
+            pred, logits = model(right_voxel, device=device)
+            loss = loss_function(logits, feature)
+            accuracy += (pred == feature).float().mean()
         elif model.modelname == "3DResNet":
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
@@ -134,7 +143,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             # pos = sample_batch["position"]
             # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
-            feature = feature.reshape(feature.shape[0], -1)
+            feature = feature.reshape(feature.shape[0], -1)[:, 0]
 
             pred, logits = model(right_voxel, device=device)
             loss = loss_function(logits, feature)
@@ -182,13 +191,22 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
                 # pos = sample_batch["position"]
                 # hrtf = sample_batch["hrtf"]
                 feature = sample_batch["feature"]
-                feature = feature.reshape(feature.shape[0], -1)
+                feature = feature.reshape(feature.shape[0], -1)[:, 0]
 
                 preds, logits = model(right_voxel, device=device)
 
                 accuracy = (preds == feature).float().mean()
                 loss = loss_function(logits, feature)
 
+                tot_accuracy += accuracy.detach()
+            elif model.modelname == "3DResNetClassifier":
+                loss_function = nn.CrossEntropyLoss()
+                right_voxel = sample_batch["right_voxel"]
+                feature = sample_batch["feature"]
+                feature = feature.reshape(feature.shape[0], -1)[:, 0]
+                preds, logits = model(right_voxel, device=device)
+                accuracy = (preds == feature).float().mean()
+                loss = loss_function(logits, feature)
                 tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNet":
                 left_voxel = sample_batch["left_voxel"]

@@ -89,11 +89,11 @@ class SonicomDataSet(Dataset):
         """获取指定模式的HRTF数据"""
         if self.mode == "left":
             hrtf_data = data["F_left"][position_idx, :]
-            mean_hrtf = self.log_mean_hrtf_left[position_idx, :]
+            mean_hrtf = self.log_mean_hrtf_left[position_idx, :] if self.use_diff else None
             hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         elif self.mode == "right":
             hrtf_data = data["F_right"][position_idx, :]
-            mean_hrtf = self.log_mean_hrtf_right[position_idx, :]
+            mean_hrtf = self.log_mean_hrtf_right[position_idx, :] if self.use_diff else None
             hrtf = torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32) if self.use_diff else torch.tensor(20 * np.log10(hrtf_data)).type(torch.float32)
         else:  # both
             left_data = 20 * np.log10(data["F_left"][position_idx, :]) - self.log_mean_hrtf_left[position_idx, :]

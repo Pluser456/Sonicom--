@@ -3,7 +3,7 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from TestNet import TestNet as threeDResnetANP
-from TestNet import ResNet3D as threeDResnet
+from TestNet import ResNet3DClassifier as threeDResnet
 from TestNet import ResNet2DClassifier as twoDResnet
 from new_dataset import SonicomDataSet, OnlyHRTFDataSet
 from utils import split_dataset, train_one_epoch, evaluate
@@ -12,8 +12,8 @@ import sys
 from torch.utils.tensorboard import SummaryWriter
 from AE import HRTF_VQVAE
 from AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    num_codebook_embeddings, commitment_cost_beta
+    num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, encoder_out_vec_num, \
+    num_codebook_embeddings, commitment_cost_beta, num_quantizers
 import time
 
 def main():
@@ -21,7 +21,7 @@ def main():
     current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    usediff = True  # 是否使用差值HRTF数据
+    usediff = False  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
@@ -37,12 +37,12 @@ def main():
         inputform ="voxel"
     elif current_model == "3DResNet":
         weightdir = "./CNN3Dweights"
-        ear_dir = "Ear_voxel"
+        ear_dir = "Ear_voxel_Wi"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
-        positions_chosen_num = 793
+        # positions_chosen_num = 793
         model = threeDResnet().to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
@@ -64,7 +64,7 @@ def main():
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=True, status="test",mode="right")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=usediff, status="test",mode="left")
 
 
     # 创建数据集
@@ -73,13 +73,13 @@ def main():
         dataset_paths["left_train"],
         dataset_paths["right_train"],
         use_diff=usediff,
-        calc_mean=True,
+        calc_mean=usediff,
         inputform=inputform,
-        mode="right",
+        mode="left",
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="right", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="left", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -90,7 +90,7 @@ def main():
         calc_mean=False,
         status="test",
         inputform=inputform,
-        mode="right",
+        mode="left",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right,
@@ -99,7 +99,7 @@ def main():
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=8,
+        batch_size=2,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
@@ -113,13 +113,13 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=2,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.85) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.85) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
@@ -128,7 +128,7 @@ def main():
     patience = 30  # 早停的容忍次数
     patience_counter = 0
     log_dir = f"runs/{current_model}"
-    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_{time.strftime('%m%d-%H%M')}")
+    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{time.strftime('%m%d-%H%M')}")
 
     for epoch in range(0, num_epochs + 1):
         # 训练
@@ -174,9 +174,9 @@ def get_hrtf_feature(hrtf_files,
     num_embeddings=num_codebook_embeddings,
     commitment_cost=commitment_cost_beta,
     pos_dim_per_row=pos_dim_for_each_row,
-    decoder_mlp_hidden_dims=decoder_mlp_layers
+    num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-rvqvae-180.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-vqvae-30oyy.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
@@ -188,8 +188,8 @@ def get_hrtf_feature(hrtf_files,
             hrtf_feature = hrtf_encoder.encoder(hrtf, pos)
             _, idx, _ = hrtf_encoder.vq_layer(hrtf_feature)
             hrtf_data.append(idx)
-    hrtf_data = torch.cat(hrtf_data, dim=0)
-    # hrtf_data = hrtf_data.permute((1,0,2,3))
+    hrtf_data = torch.cat(hrtf_data, dim=1)
+    hrtf_data = hrtf_data.permute((1,0,2,3))
     return hrtf_data
 
 if __name__ == "__main__":
