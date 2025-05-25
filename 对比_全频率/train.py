@@ -66,7 +66,7 @@ def main(args):
                             left_images=left_train,
                             right_images=right_train,
                             transform=data_transform["train"],
-                            mode="left",device=device)
+                            mode="right",device=device)
 
     # 实例化验证数据集
     log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
@@ -75,7 +75,7 @@ def main(args):
                             left_images=left_test,
                             right_images=right_test,
                             transform=data_transform["val"],
-                            mode="left",
+                            mode="right",
                             calc_mean=False,
                             provided_mean_left=log_mean_hrtf_left,
                             provided_mean_right=log_mean_hrtf_right,
@@ -100,7 +100,7 @@ def main(args):
                                              collate_fn=val_dataset.collate_fn)
 
     model = create_model().to(device)
-    model_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model1.pth"
+    model_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model10.pth"
 
     # 如果需要加载预训练模型
     if os.path.exists(model_path):
@@ -137,7 +137,7 @@ def main(args):
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
         # torch.save(model.state_dict(), "./weights/model666-{}.pth".format(epoch))
-    torch.save(model.state_dict(), "./weights/model1.pth")
+    torch.save(model.state_dict(), "./weights/model10.pth")
 
         
 
@@ -145,9 +145,9 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_classes', type=int, default=5)
-    parser.add_argument('--epochs', type=int, default=4)
+    parser.add_argument('--epochs', type=int, default=400)
     parser.add_argument('--batch-size', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.000005)
+    parser.add_argument('--lr', type=float, default=0.00003)
     parser.add_argument('--lrf', type=float, default=0.001)
 
 
