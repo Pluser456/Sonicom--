@@ -326,8 +326,8 @@ class HRTF_VQVAE(nn.Module):
                             #   num_quantizers=num_quantizers,
                                     kmeans_init = True,   # set to True
                                     kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-                                    threshold_ema_dead_code=2,
-                                    use_cosine_sim=True, # 使用余弦相似度
+                                    # threshold_ema_dead_code=2,
+                                    # use_cosine_sim=True, # 使用余弦相似度
                                     commitment_weight = commitment_cost, # commitment cost
                                     )
                                                     
