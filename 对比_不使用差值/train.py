@@ -13,11 +13,11 @@ from TestNet import TestNet as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
 
-target_index = 50
-def main(args,target_index):
-    target_index = target_index
-    print("--------------------------------")
-    print(f"target_index: {target_index}")
+load_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model_right.pth"
+save_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model_right.pth"
+
+Freq_Num = 90
+def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(device)
 
@@ -26,7 +26,7 @@ def main(args,target_index):
 
     tb_writer = SummaryWriter()
     image_dir = "Ear_image_gray_Wi"
-    hrtf_dir = "FFT_HRTF"
+    hrtf_dir = "FFT_HRTF_Wi"
     inputform = "image"
 
     dataset_paths = split_dataset(image_dir, hrtf_dir,inputform=inputform)
@@ -69,7 +69,7 @@ def main(args,target_index):
                             left_images=left_train,
                             right_images=right_train,
                             transform=data_transform["train"],
-                            mode="left",device=device)
+                            mode="right",device=device)
 
     # 实例化验证数据集
     log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
@@ -78,7 +78,7 @@ def main(args,target_index):
                             left_images=left_test,
                             right_images=right_test,
                             transform=data_transform["val"],
-                            mode="left",
+                            mode="right",
                             calc_mean=False,
                             provided_mean_left=log_mean_hrtf_left,
                             provided_mean_right=log_mean_hrtf_right,
@@ -103,7 +103,7 @@ def main(args,target_index):
                                              collate_fn=val_dataset.collate_fn)
 
     model = create_model().to(device)
-    model_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model999-freq{target_index}.pth"
+    model_path = load_path
 
     # 如果需要加载预训练模型
     if os.path.exists(model_path):
@@ -123,15 +123,15 @@ def main(args,target_index):
                                                 data_loader=train_loader,
                                                 device=device,
                                                 epoch=epoch,
-                                                target_index = target_index)
+                                                target_index = 1)
 
 
         # validate
-        # val_loss = evaluate(model=model,
-        #                              data_loader=val_loader,
-        #                              device=device,
-        #                              epoch=epoch,
-        #                              target_index = target_index)
+        val_loss = evaluate(model=model,
+                                     data_loader=val_loader,
+                                     device=device,
+                                     epoch=epoch,
+                                     target_index = 1)
 
         tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
         tb_writer.add_scalar(tags[0], train_loss, epoch)
@@ -140,7 +140,8 @@ def main(args,target_index):
         # tb_writer.add_scalar(tags[3], val_acc, epoch)
         tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
         # torch.save(model.state_dict(), "./weights/model666-{}.pth".format(epoch))
-    torch.save(model.state_dict(), "./weights/model9999-freq{}.pth".format(target_index))
+        torch.save(model.state_dict(), save_path)
+
 
         
 
@@ -148,9 +149,9 @@ def main(args,target_index):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_classes', type=int, default=5)
-    parser.add_argument('--epochs', type=int, default=4)
-    parser.add_argument('--batch-size', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.00001)
+    parser.add_argument('--epochs', type=int, default=4000)
+    parser.add_argument('--batch-size', type=int, default=16)
+    parser.add_argument('--lr', type=float, default=0.00003)
     parser.add_argument('--lrf', type=float, default=0.001)
 
 
@@ -164,5 +165,4 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='cuda:0', help='device id (i.e. 0 or 0,1 or cpu)')
 
     opt = parser.parse_args()
-    for idx in range(108):
-        main(opt, idx)
+    main(opt)
