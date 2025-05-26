@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from vector_quantize_pytorch import VectorQuantize, FSQ,GroupedResidualVQ, ResidualVQ
+from vector_quantize_pytorch import SimVQ, VectorQuantize, FSQ,GroupedResidualVQ, ResidualVQ
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -316,17 +316,20 @@ class HRTF_VQVAE(nn.Module):
         # self.vq_layer = VectorQuantize(dim =hrtf_row_width,codebook_size=num_embeddings, commitment_weight=commitment_cost)
 
         # self.vq_layer = FSQ(levels=[8, 8, 8])
-        self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
-                                            kmeans_init = True,   # set to True
-                                            kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-                                            commitment_weight = commitment_cost, # commitment cost
-                                            )
+        # self.vq_layer = GroupedResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=3, groups=2,
+        #                                     kmeans_init = True,   # set to True
+        #                                     kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+        #                                     commitment_weight = commitment_cost, # commitment cost
+        #                                     )
         
-        # self.vq_layer = ResidualVQ(dim = hrtf_row_width, codebook_size=num_embeddings, num_quantizers=num_quantizers,
-        #                             kmeans_init = True,   # set to True
-        #                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-        #                             commitment_weight = commitment_cost, # commitment cost
-        #                             )
+        self.vq_layer = VectorQuantize(dim = hrtf_row_width, codebook_size=num_embeddings, 
+                            #   num_quantizers=num_quantizers,
+                                    kmeans_init = True,   # set to True
+                                    kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
+                                    threshold_ema_dead_code=2,
+                                    use_cosine_sim=True, # 使用余弦相似度
+                                    commitment_weight = commitment_cost, # commitment cost
+                                    )
                                                     
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
@@ -341,7 +344,7 @@ class HRTF_VQVAE(nn.Module):
         self.decoder = HrtfTransformerDecoder(
             d_model=self.hrtf_row_width,
             nhead=encoder_transformer_config.get("num_heads", 4),
-            num_decoder_layers=encoder_transformer_config.get("num_encoder_layers", 3),
+            num_decoder_layers=encoder_transformer_config["num_decoder_layers"],
             dim_feedforward=encoder_transformer_config.get("dim_feedforward", 512),
             dropout=encoder_transformer_config.get("dropout", 0.1),
             pos_dim_input=pos_dim_per_row,

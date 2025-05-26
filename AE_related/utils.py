@@ -152,7 +152,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         accu_loss += loss.detach()
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
         data_loader.desc = "[train epoch {}] loss: {:.3f} acc: {:.3f}".format(epoch, accu_loss.item() / (step + 1), accuracy.item() / (step + 1))
 

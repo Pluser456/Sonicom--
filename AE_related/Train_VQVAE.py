@@ -72,7 +72,7 @@ test_loader = DataLoader(
 # --- 模型实例化和优化器 ---
 
 
-from AEconfig import transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
+from AEconfig import transformer_encoder_settings, encoder_out_vec_num, \
     pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, num_codebook_embeddings, commitment_cost_beta,num_quantizers
 
 model = HRTF_VQVAE(
@@ -171,7 +171,7 @@ for epoch in range(num_epochs):
     scheduler.step()
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{time.strftime('%m%d-%H%M')}.pth")
+        torch.save(model.state_dict(), f"{weightdir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{epoch+1}.pth")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")

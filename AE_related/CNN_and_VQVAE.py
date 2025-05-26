@@ -53,7 +53,7 @@ def main():
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = twoDResnet().to(device)
+        model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
         inputform = "image"
 
 
@@ -99,7 +99,7 @@ def main():
     # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=2,
+        batch_size=12,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
@@ -113,19 +113,19 @@ def main():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=2,
+        batch_size=6,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-3)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.85) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.99) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
     best_loss = 300
     
-    patience = 30  # 早停的容忍次数
+    patience = 300  # 早停的容忍次数
     patience_counter = 0
     log_dir = f"runs/{current_model}"
     writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{time.strftime('%m%d-%H%M')}")
@@ -146,8 +146,8 @@ def main():
         if val_loss < best_loss:
             best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-            print(f"Saved best model with validation loss: {best_loss:.4f}")
+            # torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            # print(f"Saved best model with validation loss: {best_loss:.4f}")
         else:
             patience_counter += 1
 
@@ -157,9 +157,9 @@ def main():
             break
 
         # 保存当前模型
-        if epoch % 50 == 0:
-            torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
-            print(f"Saved model at epoch {epoch}")
+        # if epoch % 50 == 0:
+        #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
+        #     print(f"Saved model at epoch {epoch}")
 
 def get_hrtf_feature(hrtf_files, 
                  status="train",
@@ -176,7 +176,7 @@ def get_hrtf_feature(hrtf_files,
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/model-vqvae-30oyy.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-12_dim_feedforward-512_dropout-0.05_codebook_size_128_quan_n_3_120.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
@@ -188,8 +188,8 @@ def get_hrtf_feature(hrtf_files,
             hrtf_feature = hrtf_encoder.encoder(hrtf, pos)
             _, idx, _ = hrtf_encoder.vq_layer(hrtf_feature)
             hrtf_data.append(idx)
-    hrtf_data = torch.cat(hrtf_data, dim=1)
-    hrtf_data = hrtf_data.permute((1,0,2,3))
+    hrtf_data = torch.cat(hrtf_data, dim=0)
+    # hrtf_data = hrtf_data.permute((1,0,2,3))
     return hrtf_data
 
 if __name__ == "__main__":
