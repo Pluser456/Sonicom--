@@ -48,7 +48,7 @@ class SonicomDataSet(Dataset):
         # 设置 transforms
         self.image_transform_train = transforms.Compose([
             # transforms.RandomHorizontalFlip(),
-            # transforms.RandomRotation(15),
+            transforms.RandomRotation(15),
             # transforms.ColorJitter(brightness=0.3, contrast=0.3),
             # transforms.RandomGrayscale(p=0.1),
             transforms.ToTensor(),
@@ -269,8 +269,8 @@ class SingleSubjectDataSet(SonicomDataSet):
                 hrtf_right = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
 
-        left_voxel = self.left_tensor[0, :, :, :] if self.left_tensor is not None else None
-        right_voxel = self.right_tensor[0, :, :, :] if self.right_tensor is not None else None
+        left_voxel = self._load_data(self.left_voxel_paths[0], is_right=False) if self.left_voxel_paths else None
+        right_voxel = self._load_data(self.right_voxel_paths[0], is_right=True) if self.right_voxel_paths else None
 
         return {
             "hrtf": hrtf,

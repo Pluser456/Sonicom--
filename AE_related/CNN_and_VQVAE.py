@@ -125,7 +125,7 @@ def main():
     num_epochs = 480*5
     best_loss = 300
     
-    patience = 300  # 早停的容忍次数
+    patience = 50  # 早停的容忍次数
     patience_counter = 0
     log_dir = f"runs/{current_model}"
     writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{time.strftime('%m%d-%H%M')}")
@@ -146,8 +146,8 @@ def main():
         if val_loss < best_loss:
             best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
-            # torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-            # print(f"Saved best model with validation loss: {best_loss:.4f}")
+            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            print(f"Saved best model with validation loss: {best_loss:.4f}")
         else:
             patience_counter += 1
 
@@ -176,7 +176,7 @@ def get_hrtf_feature(hrtf_files,
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-12_dim_feedforward-512_dropout-0.05_codebook_size_128_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
