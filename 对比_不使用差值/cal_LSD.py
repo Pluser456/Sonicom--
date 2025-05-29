@@ -70,12 +70,12 @@ def evaluate_one_hrtf(model, test_loader, device):
     return final_preds, final_targets
     # return all_preds, all_targets
 
-def main(args, mode = "left"):
+def main(args, mode = "right"):
     print("------------------------------------------------")
     # 2. 模型和训练配置
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = create_model().to(device)  # 使用之前定义的网络结构
-    model_path = f"D:\大学\大三下\大创项目\Sonicom--2d\weights\model1.pth"
+    model_path = f"D:\大学\大三下\大创项目\Sonicom--2d\weights\model_right.pth"
 
     # 如果需要加载预训练模型
     if os.path.exists(model_path):
