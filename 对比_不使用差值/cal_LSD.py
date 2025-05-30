@@ -233,6 +233,14 @@ def main(args, mode = "right"):
 
     # 保存LSD结果
     np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
+    # 保存频率数据
+    freq_list = (freq_list + 1) * 200
+    np.savetxt('freq_data.txt', freq_list, fmt='%.1f', header='Frequency (Hz)')
+
+    # 保存LSD数据
+    np.savetxt('lsd_data.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
+
+    print("数据已成功导出到 freq_data.txt 和 lsd_data.txt")
     #-------------------------
     # 字体与字号全局设置（只需修改这里即可统一调整）
     #-------------------------
@@ -244,7 +252,7 @@ def main(args, mode = "right"):
     markersize = 8          # 数据点大小
     #-------------------------    
     # 绘制频率-LSD图
-    freq_list = freq_list * 200
+
     plt.figure(figsize=(10, 6), dpi=120)  # 设置更高分辨率
 
     # 绘制曲线 (红色实线+圆形标记)

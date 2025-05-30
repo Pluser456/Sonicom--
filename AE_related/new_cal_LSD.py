@@ -174,31 +174,39 @@ for freq_idx in range(len(freq_list)):
     avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
     # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 
+# 保存频率数据
+freq_list = (freq_list + 1) * 200
+np.savetxt('freq_data1.txt', freq_list, fmt='%.1f', header='Frequency (Hz)')
 
-# 绘制频率-LSD图
-plt.figure(figsize=(10, 6))
-plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
-plt.semilogx(freq_list, avg_lsd_per_freq_of_mean, 'r-o')
-plt.title('Frequency vs LSD')
-plt.xlabel('Frequency')
-plt.ylabel('LSD (dB)')
-plt.grid(True, which="both", ls="--")
-plt.legend(['LSD of predicted HRTF', 'LSD of mean HRTF'])
-# 保存频率-LSD图片
-plt.savefig("LSD_per_frequency.png")  # 保存频率-LSD图片
+# 保存LSD数据
+np.savetxt('lsd_data1.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
+np.savetxt('lsd_mean_data.txt', avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD (dB)')
 
-#绘制LSD对比图
-plt.figure(figsize=(10, 6))
-plt.plot(range(1, len(res_list)+1), res_list, 'b-o', label='LSD of predicted HRTF')
-plt.plot(range(1, len(res_list_mean)+1), res_list_mean, 'r-o', label='LSD of mean HRTF')
-plt.title('LSD Comparison')
-plt.xlabel('HRTF ID')
-plt.ylabel('LSD (dB)')
-plt.legend()
-plt.grid(True, which="both", ls="--")
-# 保存LSD对比图
-plt.savefig("LSD_comparison.png")  # 保存LSD对比图
-plt.show(block=True)  # 显示图像，阻止脚本结束时关闭图像窗口
 
-# 保存LSD结果
-np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
+# # 绘制频率-LSD图
+# plt.figure(figsize=(10, 6))
+# plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
+# plt.semilogx(freq_list, avg_lsd_per_freq_of_mean, 'r-o')
+# plt.title('Frequency vs LSD')
+# plt.xlabel('Frequency')
+# plt.ylabel('LSD (dB)')
+# plt.grid(True, which="both", ls="--")
+# plt.legend(['LSD of predicted HRTF', 'LSD of mean HRTF'])
+# # 保存频率-LSD图片
+# plt.savefig("LSD_per_frequency.png")  # 保存频率-LSD图片
+
+# #绘制LSD对比图
+# plt.figure(figsize=(10, 6))
+# plt.plot(range(1, len(res_list)+1), res_list, 'b-o', label='LSD of predicted HRTF')
+# plt.plot(range(1, len(res_list_mean)+1), res_list_mean, 'r-o', label='LSD of mean HRTF')
+# plt.title('LSD Comparison')
+# plt.xlabel('HRTF ID')
+# plt.ylabel('LSD (dB)')
+# plt.legend()
+# plt.grid(True, which="both", ls="--")
+# # 保存LSD对比图
+# plt.savefig("LSD_comparison.png")  # 保存LSD对比图
+# plt.show(block=True)  # 显示图像，阻止脚本结束时关闭图像窗口
+
+# # 保存LSD结果
+# np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
