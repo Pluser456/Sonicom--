@@ -233,19 +233,56 @@ def main(args, mode = "right"):
 
     # 保存LSD结果
     np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
-    
-        # 绘制频率-LSD图
-    plt.figure(figsize=(10, 6))
-    plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
-    plt.title('Frequency vs LSD')
-    plt.xlabel('Frequency')
-    plt.ylabel('LSD (dB)')
-    plt.grid(True, which="both", ls="--")
+    #-------------------------
+    # 字体与字号全局设置（只需修改这里即可统一调整）
+    #-------------------------
+    plt.rcParams['font.family'] = 'Times New Roman'  # 全局字体设置
+    title_fontsize = 16     # 标题字号
+    label_fontsize = 14     # 坐标轴标签字号
+    tick_fontsize = 12       # 坐标轴刻度字号
+    linewidth = 1.5         # 线条粗细
+    markersize = 8          # 数据点大小
+    #-------------------------    
+    # 绘制频率-LSD图
+    freq_list = freq_list * 200
+    plt.figure(figsize=(10, 6), dpi=120)  # 设置更高分辨率
+
+    # 绘制曲线 (红色实线+圆形标记)
+    line = plt.plot(freq_list, avg_lsd_per_freq, 
+                    'r-o',                    # 红色实线+圆形标记
+                    linewidth=linewidth, 
+                    markersize=markersize,
+                    markeredgecolor='black',  # 增加黑色描边
+                    markeredgewidth=0.5)      # 标记描边粗细
+
+    # 坐标轴设置
+    plt.xlim(min(freq_list)*0.9, max(freq_list)*1.1)  # 留出10%空白边距
+    plt.ylim(0, 5.2)                                  # 根据你的数据示例设置
+
+    # 标签与标题
+    plt.title('Frequency vs LSD', fontsize=title_fontsize, pad=15)  # pad是标题间距
+    plt.xlabel('Frequency(Hz)', fontsize=label_fontsize, labelpad=8)
+    plt.ylabel('LSD (dB)', fontsize=label_fontsize, labelpad=8)
+
+    # 刻度参数
+    plt.tick_params(axis='both', which='major', 
+                    labelsize=tick_fontsize, 
+                    direction='in',          # 刻度线朝内
+                    width=1.2)               # 刻度线粗细
+
+    # 网格线
+    plt.grid(True, which="both", 
+            linestyle="--", 
+            alpha=0.6,                    # 透明度
+            linewidth=0.8)
+
+    # 先保存再显示 (避免保存空白图片)
+    plt.savefig("LSD_per_frequency.png", bbox_inches='tight', dpi=300)  # 保存高清图
+    plt.savefig("LSD_per_frequency.pdf", bbox_inches='tight')           # 矢量图格式
     plt.show()
-    # 保存LSD结果
-    np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
-    # 保存频率-LSD图片
-    plt.savefig("LSD_per_frequency.png")
+
+    # 保存数据到文件
+    np.savetxt("LSD_results.txt", res_list, fmt='%.6f', header='LSD Values (dB)')
     
     return np.mean(res_list), np.mean(res_list_mean)
 

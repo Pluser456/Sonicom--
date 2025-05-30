@@ -21,6 +21,6 @@ transformer_encoder_settings = {
 decoder_mlp_layers = [256, 256, 256, 256, 128] # 可根据需要调整
 
 # VQ-VAE 特定参数
-num_codebook_embeddings = 4
+num_codebook_embeddings = 16
 commitment_cost_beta = 0.25
 num_quantizers = 3

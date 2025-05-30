@@ -44,7 +44,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device, weights_only=True))
 print("Load hrtf_encoder")
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
     model.eval()

@@ -68,7 +68,7 @@ def main():
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device,weights_only=True))
     print("Load HRTF encoder")
 
     # 数据分割
