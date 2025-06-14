@@ -2,9 +2,6 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from TestNet import TestNet as threeDResnetANP
-from TestNet import ResNet3D as threeDResnet
-from TestNet import ResNet2DClassifier as twoDResnet
 from new_dataset import SonicomDataSet, SingleSubjectDataSet
 from utils import split_dataset
 import numpy as np
@@ -16,7 +13,7 @@ from AEconfig import pos_dim_for_each_row, \
 
 # 设备配置
 # current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-weightname = "best_model.pth"
+weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 batch_size = 32
@@ -29,11 +26,8 @@ if os.path.exists(weightdir) is False:
     os.makedirs(weightdir)
 modelpath = f"{weightdir}/{weightname}"
 # positions_chosen_num = 793
-model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
 inputform = "image"
 
-model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-print("Load model from", modelpath)
 hrtf_encoder = HRTF_VQVAE(
     hrtf_row_width=width_per_hrtf_row,
     hrtf_num_rows=num_hrtf_rows,
@@ -44,10 +38,9 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device, weights_only=True))
 print("Load hrtf_encoder")
-def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
-    model.eval()
+def evaluate_one_hrtf(hrtf_encoder, test_loader):
     hrtf_encoder.eval()
 
     all_preds = []
@@ -63,12 +56,13 @@ def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
             # pred = pred.reshape(-1, 3, 3)
             # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
             # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
-            outputs = hrtf_encoder.decoder(targets, pos).squeeze(1)  # [batch_size, 90]
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
             # 转换到对数域 (dB)
             log_target = 20 * torch.log10(targets)
+            outputs, _, _ = hrtf_encoder(log_target, pos)  # [batch_size, 90]
+            outputs = outputs.squeeze(1)
             if usediff:
                 pred = torch.abs(outputs + meanloghrtf)
             else:
@@ -131,7 +125,7 @@ for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
                             pin_memory=True,
                             collate_fn=val_dataset.collate_fn
                             )
-    pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, hrtf_encoder, dataloader)
+    pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(hrtf_encoder, dataloader)
     pred_list.append(pred_log_hrtf)
     true_list.append(true_log_hrtf)
     lsd = torch.sqrt(torch.mean((pred_log_hrtf - true_log_hrtf) ** 2)).item()

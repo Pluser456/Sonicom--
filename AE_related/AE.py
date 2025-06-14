@@ -358,8 +358,7 @@ class HRTF_VQVAE(nn.Module):
         
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
         # ze = ze.permute(0, 2, 1)
-        # zq, indices, vq_loss = self.vq_layer(ze)
-        zq = ze
+        zq, indices, vq_loss = self.vq_layer(ze)
         
         # 将 zq 展平
         # zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
@@ -369,5 +368,4 @@ class HRTF_VQVAE(nn.Module):
         zq_flat = zq
         reconstructed_hrtf = self.decoder(zq_flat, pos_data)
         
-        # return reconstructed_hrtf, vq_loss.sum(), indices
-        return reconstructed_hrtf, torch.zeros(1, device=hrtf_data.device), torch.zeros(hrtf_data.shape[0], self.encoder_out_vec_num, device=hrtf_data.device) # 返回重建的 HRTF，VQ 损失和编码索引
+        return reconstructed_hrtf, vq_loss.sum(), indices

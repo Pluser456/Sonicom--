@@ -116,17 +116,17 @@ class SonicomDataSet(Dataset):
             if is_right:
                 voxel = np.flip(voxel, axis=1).copy()
 
-            if self.status == "train":
-                # 数据增强：翻转、旋转、加噪声
-                if random.random() < 0.5:
-                    voxel = np.flip(voxel, axis=0).copy()
-                if random.random() < 0.5:
-                    voxel = np.flip(voxel, axis=2).copy()
-                k = random.randint(0, 3)
-                voxel = np.rot90(voxel, k, axes=(0, 1)).copy()
-                if random.random() < 0.3:
-                    voxel += np.random.normal(0, 0.02, voxel.shape)
-                    voxel = np.clip(voxel, 0, 1)
+            # if self.status == "train":
+            #     # 数据增强：翻转、旋转、加噪声
+            #     if random.random() < 0.5:
+            #         voxel = np.flip(voxel, axis=0).copy()
+            #     if random.random() < 0.5:
+            #         voxel = np.flip(voxel, axis=2).copy()
+            #     k = random.randint(0, 3)
+            #     voxel = np.rot90(voxel, k, axes=(0, 1)).copy()
+            #     # if random.random() < 0.3:
+            #     #     voxel += np.random.normal(0, 0.02, voxel.shape)
+            #     #     voxel = np.clip(voxel, 0, 1)
             return torch.tensor(voxel, dtype=torch.float32).unsqueeze(0)
 
     @staticmethod

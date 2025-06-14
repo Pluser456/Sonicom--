@@ -43,7 +43,7 @@ def main():
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = threeDResnet().to(device)
+        model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
         weightdir = "./CNNweights"
@@ -64,7 +64,7 @@ def main():
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=usediff, status="test",mode="left")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=usediff, status="test",mode="right")
 
 
     # 创建数据集
@@ -75,11 +75,11 @@ def main():
         use_diff=usediff,
         calc_mean=usediff,
         inputform=inputform,
-        mode="left",
+        mode="right",
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="left", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="right", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -90,7 +90,7 @@ def main():
         calc_mean=False,
         status="test",
         inputform=inputform,
-        mode="left",
+        mode="right",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right,
@@ -146,7 +146,7 @@ def main():
         if val_loss < best_loss:
             best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            torch.save(model.state_dict(), f"{weightdir}/best_model_codebook_size_{str(num_codebook_embeddings)}.pth")
             print(f"Saved best model with validation loss: {best_loss:.4f}")
         else:
             patience_counter += 1
@@ -176,7 +176,7 @@ def get_hrtf_feature(hrtf_files,
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []

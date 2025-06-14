@@ -17,7 +17,7 @@ from AEconfig import pos_dim_for_each_row, \
 def main():
     # 设备配置
     current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = "best_model.pth"
+    weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
@@ -68,7 +68,7 @@ def main():
     if os.path.exists(modelpath):
         print("Load model from", modelpath)
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device,weights_only=True))
     print("Load HRTF encoder")
 
     # 数据分割
@@ -129,7 +129,8 @@ def main():
             hrtf = batch["hrtf"].to(device).unsqueeze(1)
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
-            pred, _ = model(right_picture, device=device) # [batch_size, 18]
+            pred, _ = model(right_picture, device=device) # [batch_size, 90]
+            pred = pred.unsqueeze(1)  # [batch_size, 1, 90]
             # pred = pred.reshape(-1, 2, 3, 3)
             # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
             # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
