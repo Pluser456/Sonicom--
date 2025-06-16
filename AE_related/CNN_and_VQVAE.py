@@ -18,7 +18,7 @@ import time
 
 def main():
     # 设备配置
-    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
@@ -124,6 +124,7 @@ def main():
     # 训练循环
     num_epochs = 480*5
     best_loss = 300
+    best_acc = 0
     
     patience = 50  # 早停的容忍次数
     patience_counter = 0
@@ -132,10 +133,10 @@ def main():
 
     for epoch in range(0, num_epochs + 1):
         # 训练
-        loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
+        loss, acc = train_one_epoch(model, optimizer, train_loader, device, epoch)
 
         # 验证
-        val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
+        val_loss, val_acc = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
         writer.add_scalar("Loss/train", loss, epoch)
         writer.add_scalar("Loss/val", val_loss, epoch)
         writer.add_scalar("Learning Rate", optimizer.param_groups[0]['lr'], epoch)
@@ -143,17 +144,17 @@ def main():
         scheduler.step() # 在每个 epoch 结束后（或验证后）调用
 
         # 检查是否是最佳模型
-        if val_loss < best_loss:
-            best_loss = val_loss
+        if val_acc > best_acc:
+            best_acc = val_acc
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model_codebook_size_{str(num_codebook_embeddings)}.pth")
-            print(f"Saved best model with validation loss: {best_loss:.4f}")
+            torch.save(model.state_dict(), f"{weightdir}/best_model_codebook_size_{str(num_codebook_embeddings)}_3D.pth")
+            print(f"Saved best model with validation accuracy: {best_acc:.4f}")
         else:
             patience_counter += 1
 
         # 检查早停条件
         if patience_counter >= patience:
-            print(f"Early stopping triggered after {epoch} epochs with best validation loss: {best_loss:.4f}")
+            print(f"Early stopping triggered after {epoch} epochs with best validation accuracy: {best_acc:.4f}")
             break
 
         # 保存当前模型
@@ -176,7 +177,7 @@ def get_hrtf_feature(hrtf_files,
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device,weights_only=True))
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []

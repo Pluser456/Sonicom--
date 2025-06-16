@@ -161,7 +161,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
     final_loss = accu_loss.item() / (step + 1)
 
-    return final_loss
+    return final_loss, accuracy.item() / (step + 1)
 
 def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
     model.eval()
@@ -230,7 +230,7 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
             data_loader.desc = "[valid epoch {}] loss: {:.3f} acc: {:.3f}".format(epoch, accu_loss.item() / (step + 1), tot_accuracy.item() / (step + 1))
 
     final_loss = accu_loss.item() / (step + 1)
-    return final_loss
+    return final_loss, tot_accuracy.item() / (step + 1)
 
 
     
