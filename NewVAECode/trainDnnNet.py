@@ -80,9 +80,9 @@ def main(args):
     print("Batch keys:", batch_train_test.keys())  
     print("Shape of z_ears:", batch_train_test["z_ears"].shape) 
     print("Shape of z_hrtf:", batch_train_test["z_hrtf"].shape)
-    print("Shape of position:", batch_train_test["position"].shape)     
+    #print("Shape of position:", batch_train_test["position"].shape)     
     # 输出为: Shape of z_ears: torch.Size([50, 1, 256]) Shape of z_hrtf: torch.Size([50, 1,32])
-    #           Shape of position: torch.Size([50, 1,3])
+    #         Shape of position: torch.Size([50, 1,3])
 
     
     test_loader = DataLoader(
@@ -94,7 +94,7 @@ def main(args):
 
     #batch_example = next(iter(test_loader))
     #model.example_input_array = batch_example["left_image"]
-    
+
     # 训练循环
     num_epochs = 480*5
 

@@ -81,6 +81,9 @@ def main(args):
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
+    batch_train_test = next(iter(train_loader))
+    print(batch_train_test["hrtf"].shape)
+    #shape:hrtf[50,108]
     
     test_loader = DataLoader(
         test_dataset,

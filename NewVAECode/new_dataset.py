@@ -434,24 +434,24 @@ class SonicomDataSetDNN(SonicomDataSet):
     def __getitem__(self, idx):
         batch = super().__getitem__(idx)
         left_image = batch["left_image"].unsqueeze(0)
-        hrtf = batch["hrtf"].unsqueeze(0)
+        hrtf = batch["hrtf"]
         sinaz= batch["position"][0]
         cosaz= batch["position"][1]
         sinele= batch["position"][2]
-        position = batch["position"].unsqueeze(0)
-        
+        position = batch["position"]
+
         with torch.no_grad():
             h_vae=self.vae_model.vae.encoder(left_image)
-            z_vae, mu, logvar = self.vae_model.vae._bottleneck(h_vae)
-            z_ears = self.vae_model.vae.fc_rep(z_vae)
+            z_ears, mu, logvar = self.vae_model.vae._bottleneck(h_vae)
+            #z_ears = self.vae_model.vae.fc_rep(z_vae)
 
             means_cvae, log_var_cvae = self.cvae_model.cvae.enc(hrtf, position)
             z_hrtf = self.cvae_model.cvae.reparameterize(means_cvae, log_var_cvae)
         
         return {  
-            "z_ears":z_ears,
+            "z_ears":z_ears.squeeze(0),
             "z_hrtf":z_hrtf,
-            "position":position,
+            #"position":position,
             "sin(azimuth)": sinaz,
             "cos(azimuth)": cosaz,
             "sin(elevation)": sinele,
@@ -461,14 +461,14 @@ class SonicomDataSetDNN(SonicomDataSet):
     def collate_fn(batch):
         z_ears = torch.stack([item["z_ears"] for item in batch])
         z_hrtf = torch.stack([item["z_hrtf"] for item in batch])
-        position = torch.stack([item["position"] for item in batch])
+        #position = torch.stack([item["position"] for item in batch])
         sin_azimuths = torch.stack([item["sin(azimuth)"] for item in batch])
         cos_azimuths = torch.stack([item["cos(azimuth)"] for item in batch])
         sin_elevations = torch.stack([item["sin(elevation)"] for item in batch])
         return {
             "z_ears":z_ears,
             "z_hrtf":z_hrtf,
-            "position":position,
+            #"position":position,
             "sin(azimuth)": sin_azimuths,
             "cos(azimuth)": cos_azimuths,
             "sin(elevation)": sin_elevations
