@@ -40,7 +40,7 @@ class DNNCfg(pl.LightningModule):
         self.save_hyperparameters()
         self.grad_freq = 50
         self.fig_freq = 10
-        self.c_labels = cfg['c']
+        self.c_labels = cfg['labels']
         input_size = cfg['z_ears_size'] + len(self.c_labels)
         outputs_size = cfg['z_hrtf_size']
         hidden_layers = cfg['hidden_layers']
@@ -108,7 +108,10 @@ class DNNCfg(pl.LightningModule):
         #     self.logger.experiment.add_image('Valid/ears', img, self.current_epoch)
 
     def _shared_eval(self, batch, batch_idx):
-        z_ears, z_hrtf_true, labels = batch
+        #z_ears, z_hrtf_true, labels = batch
+        z_ears = batch['z_ears']
+        z_hrtf_true = batch['z_hrtf']
+        labels = {lbl: batch[lbl] for lbl in self.c_labels}
         # concatenate labels to z_ears
         c = torch.stack([labels[lbl] for lbl in self.c_labels], dim=-1).float()
         x = torch.cat((z_ears, c), dim=-1)

@@ -6,38 +6,31 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from new_dataset import SonicomDataSet,SonicomDataSetHRTF
+from new_dataset import SonicomDataSet,SonicomDataSetDNN
+from dnn_cfg import DNNCfg
+from vae_incept_cfg import InceptionVAECfg as VAECfg  
 from cvae_dense_cfg import CVAECfg 
 from utils import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
-import sys
-import pandas as pd
 
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     
-    # 创建保存目录
-    #os.makedirs("./CVAEweights", exist_ok=True)
-    tb_writer = SummaryWriter()
-
-    # 加载配置文件（参考ear_to_prtf的逻辑）
     with open(args.cfg_path, 'r') as f:
         cfg = json.load(f)
 
-    model = CVAECfg(
-        nfft=cfg['hrtf']['nfft'],
+    model = DNNCfg(
         cfg={
-            'labels': cfg['hrtf']['labels'],
-            'encoder_layer_sizes': cfg['hrtf']['encoder_layer_sizes'],
-            'decoder_layer_sizes': cfg['hrtf']['decoder_layer_sizes'],
-            'latent_size': cfg['hrtf']['latent_size'],
+            'labels': cfg['latent']['labels'],
+            'z_ears_size': cfg['latent']['z_ears_size'],
+            'z_hrtf_size': cfg['latent']['z_hrtf_size'],
+            'hidden_layers': cfg['latent']['hidden_layers'],
+            'dropout_rate': cfg['latent']['dropout_rate'],
         }
     ).to(device)
-    #print(f"Labels type: {type(cfg['hrtf']['labels'])}, Labels: {cfg['hrtf']['labels']}")
-    # print(model.cvae)
-    # print()
+    
 
     # 数据集准备（保持原有逻辑）
     image_dir = "Ear_image_gray"
@@ -53,7 +46,7 @@ def main(args):
     ])
 
     # 创建数据集
-    train_dataset = SonicomDataSetHRTF(
+    train_dataset = SonicomDataSetDNN(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
@@ -63,7 +56,7 @@ def main(args):
         mode="left"
     )
     
-    test_dataset = SonicomDataSetHRTF(
+    test_dataset = SonicomDataSetDNN(
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],
@@ -81,9 +74,16 @@ def main(args):
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
+    
+
     batch_train_test = next(iter(train_loader))
-    print(batch_train_test["hrtf"].shape)
-    #shape:hrtf[50,108]
+    print("Batch keys:", batch_train_test.keys())  
+    print("Shape of z_ears:", batch_train_test["z_ears"].shape) 
+    print("Shape of z_hrtf:", batch_train_test["z_hrtf"].shape)
+    #print("Shape of position:", batch_train_test["position"].shape)     
+    # 输出为: Shape of z_ears: torch.Size([50, 1, 256]) Shape of z_hrtf: torch.Size([50, 1,32])
+    #         Shape of position: torch.Size([50, 1,3])
+
     
     test_loader = DataLoader(
         test_dataset,
@@ -91,37 +91,19 @@ def main(args):
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-  
-    batch_example = next(iter(test_loader))#pos[10,3],hrtf(left)[10,108]
-    resp_true = batch_example["hrtf"]
-    c = torch.cat([batch_example[lbl].unsqueeze(-1) for lbl in model.c_labels], dim=-1).float()
-    model.example_input_array = (resp_true, c)
-    labels_dict = {lbl: batch_example[lbl].cpu().numpy() for lbl in model.c_labels}
-    model.example_input_labels = pd.DataFrame(labels_dict)
-    
 
+    #batch_example = next(iter(test_loader))
+    #model.example_input_array = batch_example["left_image"]
 
     # 训练循环
     num_epochs = 480*5
-    '''
-    optimizers, lr_schedulers = model.configure_optimizers()
-    optimizer = optimizers[0]
-    lr_scheduler = lr_schedulers[0]
 
-    
-    for epoch in range(0, num_epochs):
-        # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
-        model.training_epoch_end()
-    '''    
     # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="cvae_5.12_model")
+    logger = TensorBoardLogger("tb_logs", name="dnn_6.17_model")
 
     trainer = Trainer(
         max_epochs=num_epochs,
         logger=logger,
-        gpus=1,
-        accelerator='gpu',
         val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
     )
 
