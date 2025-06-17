@@ -387,11 +387,14 @@ class SonicomDataSetDNN(SonicomDataSet):
                          transform=transform, calc_mean=calc_mean, 
                          mode=mode, provided_mean_left=provided_mean_left, 
                          provided_mean_right=provided_mean_right, status=status)
-        device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+        
+        args_device =r"cuda:0"
+        device = torch.device(args_device if torch.cuda.is_available() else "cpu")
         cfg_path = r"NewVAECode/configs/edges_median.json"
         with open(cfg_path, 'r') as f:
             cfg = json.load(f)
-        cvae_model = CVAECfg(
+
+        self.cvae_model = CVAECfg(
         nfft=cfg['hrtf']['nfft'],
         cfg={
             'labels': cfg['hrtf']['labels'],
@@ -403,10 +406,10 @@ class SonicomDataSetDNN(SonicomDataSet):
         cvae_path= r"weights/version_13/checkpoints/epoch=128-step=384677.ckpt"
         cvae_checkpoint = torch.load(cvae_path, map_location=device)
         cvae_state_dict = cvae_checkpoint['state_dict']
-        cvae_model.load_state_dict(cvae_state_dict)
+        self.cvae_model.load_state_dict(cvae_state_dict)
+        self.cvae_model.eval()
 
-
-        vae_model = VAECfg(
+        self.vae_model = VAECfg(
             input_size=[cfg['ears']['img_size'], cfg['ears']['img_size']],
             cfg={
                 'input_channels': cfg['ears']['img_channels'],
@@ -421,17 +424,53 @@ class SonicomDataSetDNN(SonicomDataSet):
         vae_path= r"weights/version_17/checkpoints/epoch=925-step=35188.ckpt"
         vae_checkpoint = torch.load(vae_path, map_location=device)
         vae_state_dict = vae_checkpoint['state_dict']
-        vae_model.load_state_dict(vae_state_dict)
-        
+        self.vae_model.load_state_dict(vae_state_dict)
+        self.vae_model.eval()
+
+        #print(dir(self.vae_model))
+        #print(dir(self.cvae_model))
+        #print(cvae_checkpoint['state_dict'].keys())
+     
     def __getitem__(self, idx):
         batch = super().__getitem__(idx)
+        left_image = batch["left_image"].unsqueeze(0)
+        hrtf = batch["hrtf"].unsqueeze(0)
+        sinaz= batch["position"][0]
+        cosaz= batch["position"][1]
+        sinele= batch["position"][2]
+        position = batch["position"].unsqueeze(0)
+        
+        with torch.no_grad():
+            h_vae=self.vae_model.vae.encoder(left_image)
+            z_vae, mu, logvar = self.vae_model.vae._bottleneck(h_vae)
+            z_ears = self.vae_model.vae.fc_rep(z_vae)
+
+            means_cvae, log_var_cvae = self.cvae_model.cvae.enc(hrtf, position)
+            z_hrtf = self.cvae_model.cvae.reparameterize(means_cvae, log_var_cvae)
+        
         return {  
-            "hrtf": batch["hrtf"].unsqueeze(0),
+            "z_ears":z_ears,
+            "z_hrtf":z_hrtf,
+            "position":position,
+            "sin(azimuth)": sinaz,
+            "cos(azimuth)": cosaz,
+            "sin(elevation)": sinele,
         }
     
     @staticmethod
     def collate_fn(batch):
-        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        z_ears = torch.stack([item["z_ears"] for item in batch])
+        z_hrtf = torch.stack([item["z_hrtf"] for item in batch])
+        position = torch.stack([item["position"] for item in batch])
+        sin_azimuths = torch.stack([item["sin(azimuth)"] for item in batch])
+        cos_azimuths = torch.stack([item["cos(azimuth)"] for item in batch])
+        sin_elevations = torch.stack([item["sin(elevation)"] for item in batch])
         return {
-            "hrtf": hrtfs,
+            "z_ears":z_ears,
+            "z_hrtf":z_hrtf,
+            "position":position,
+            "sin(azimuth)": sin_azimuths,
+            "cos(azimuth)": cos_azimuths,
+            "sin(elevation)": sin_elevations
         }
+    
