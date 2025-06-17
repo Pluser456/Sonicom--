@@ -15,15 +15,6 @@ from AEconfig import pos_dim_for_each_row, \
     num_codebook_embeddings, commitment_cost_beta, num_quantizers
 
 # 设备配置
-<<<<<<< HEAD
-# current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-# weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
-weightname = f"best_model.pth"
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-=======
->>>>>>> 45f286a452e21aeeedd9c85dbc2d90c519b32f80
 batch_size = 32
 usediff = False  # 是否使用差分数据
 
@@ -62,11 +53,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-<<<<<<< HEAD
-hrtf_encoder.load_state_dict(torch.load("D:\大学\大三下\大创项目\Sonicom--2d\HRTFAEweights_old\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device, weights_only=True))
-=======
 hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device, weights_only=True))
->>>>>>> 45f286a452e21aeeedd9c85dbc2d90c519b32f80
 print("Load hrtf_encoder")
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
     model.eval()
