@@ -10,7 +10,10 @@ runs/
 .idea/
 *.png
 *.pyc
-*.yaml
-*.ckpt
 tb_logs/
-CVAEweights
+NewVAECode/CVAEweights/
+WinFFT_HRTF/
+vector-quantize-pytorch-master/
+vector_quantize_pytorch/
+FFT_HRTF_Wi/
+Ear_voxel_Wi/
