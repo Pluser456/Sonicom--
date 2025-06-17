@@ -388,8 +388,7 @@ class SonicomDataSetDNN(SonicomDataSet):
                          mode=mode, provided_mean_left=provided_mean_left, 
                          provided_mean_right=provided_mean_right, status=status)
         
-        args_device =r"cuda:0"
-        device = torch.device(args_device if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         cfg_path = r"NewVAECode/configs/edges_median.json"
         with open(cfg_path, 'r') as f:
             cfg = json.load(f)
@@ -407,6 +406,7 @@ class SonicomDataSetDNN(SonicomDataSet):
         cvae_checkpoint = torch.load(cvae_path, map_location=device)
         cvae_state_dict = cvae_checkpoint['state_dict']
         self.cvae_model.load_state_dict(cvae_state_dict)
+        self.cvae_model = self.cvae_model.to(device)
         self.cvae_model.eval()
 
         self.vae_model = VAECfg(
@@ -425,6 +425,7 @@ class SonicomDataSetDNN(SonicomDataSet):
         vae_checkpoint = torch.load(vae_path, map_location=device)
         vae_state_dict = vae_checkpoint['state_dict']
         self.vae_model.load_state_dict(vae_state_dict)
+        self.vae_model = self.vae_model.to(device)
         self.vae_model.eval()
 
         #print(dir(self.vae_model))
@@ -432,13 +433,14 @@ class SonicomDataSetDNN(SonicomDataSet):
         #print(cvae_checkpoint['state_dict'].keys())
      
     def __getitem__(self, idx):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         batch = super().__getitem__(idx)
-        left_image = batch["left_image"].unsqueeze(0)
-        hrtf = batch["hrtf"]
-        sinaz= batch["position"][0]
-        cosaz= batch["position"][1]
-        sinele= batch["position"][2]
-        position = batch["position"]
+        left_image = batch["left_image"].unsqueeze(0).to(device)
+        hrtf = batch["hrtf"].to(device)
+        sinaz= batch["position"][0].to(device)
+        cosaz= batch["position"][1].to(device)
+        sinele= batch["position"][2].to(device)
+        position = batch["position"].to(device)
 
         with torch.no_grad():
             h_vae=self.vae_model.vae.encoder(left_image)
