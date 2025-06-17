@@ -14,3 +14,4 @@ runs/
 *.ckpt
 tb_logs/
 CVAEweights
+weights/

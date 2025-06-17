@@ -2,7 +2,8 @@ import torch
 
 # 指定模型保存的路径
 #checkpoint_path = "NewVAECode/checkpoints/vae_incept_edges.ckpt"
-checkpoint_path = "NewVAECode/checkpoints/cvae_dense_fullgrid.ckpt"
+#checkpoint_path = "NewVAECode/checkpoints/cvae_dense_fullgrid.ckpt"
+checkpoint_path = "NewVAECode/checkpoints/dnn_edge_median.ckpt"
 
 # 加载模型的状态字典
 #checkpoint = torch.load(checkpoint_path)

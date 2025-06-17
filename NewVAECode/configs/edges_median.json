@@ -13,7 +13,13 @@
     },
     "latent": {
         "model_type": "dnn",
-        "model_ckpt_path": "NewVAECode/checkpoints/dnn_edge_median.ckpt"
+        "model_ckpt_path": "NewVAECode/checkpoints/dnn_edge_median.ckpt",
+        "labels": ["sin(azimuth)", "cos(azimuth)", "sin(elevation)"], 
+        "z_ears_size": 64,
+        "z_hrtf_size": 32,
+        "hidden_layers": [256,256,128, 64, 32],
+        "dropout_rate": 0.2
+
     },
     "hrtf": {
         "model_type": "cvae_dense",

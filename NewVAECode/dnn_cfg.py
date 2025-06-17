@@ -40,7 +40,7 @@ class DNNCfg(pl.LightningModule):
         self.save_hyperparameters()
         self.grad_freq = 50
         self.fig_freq = 10
-        self.c_labels = cfg['c']
+        self.c_labels = cfg['labels']
         input_size = cfg['z_ears_size'] + len(self.c_labels)
         outputs_size = cfg['z_hrtf_size']
         hidden_layers = cfg['hidden_layers']

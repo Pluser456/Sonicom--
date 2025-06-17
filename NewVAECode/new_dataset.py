@@ -8,6 +8,9 @@ import h5py
 import os
 from torchvision import transforms
 from PIL import Image
+import json
+from vae_incept_cfg import InceptionVAECfg as VAECfg  
+from cvae_dense_cfg import CVAECfg 
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
@@ -361,6 +364,64 @@ class SonicomDataSetConvHRTF(SonicomDataSet):
                          transform=transform, calc_mean=calc_mean, 
                          mode=mode, provided_mean_left=provided_mean_left, 
                          provided_mean_right=provided_mean_right, status=status)
+        
+    def __getitem__(self, idx):
+        batch = super().__getitem__(idx)
+        return {  
+            "hrtf": batch["hrtf"].unsqueeze(0),
+        }
+    
+    @staticmethod
+    def collate_fn(batch):
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        return {
+            "hrtf": hrtfs,
+        }
+    
+class SonicomDataSetDNN(SonicomDataSet):
+    """只返回左耳HRTF和position的数据集"""
+    def __init__(self, hrtf_files, left_images, right_images,
+                 transform=None, calc_mean=True, 
+                 mode="left", provided_mean_left=None, provided_mean_right=None, status="train"):
+        super().__init__(hrtf_files, left_images, right_images,  
+                         transform=transform, calc_mean=calc_mean, 
+                         mode=mode, provided_mean_left=provided_mean_left, 
+                         provided_mean_right=provided_mean_right, status=status)
+        device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+        cfg_path = r"NewVAECode/configs/edges_median.json"
+        with open(cfg_path, 'r') as f:
+            cfg = json.load(f)
+        cvae_model = CVAECfg(
+        nfft=cfg['hrtf']['nfft'],
+        cfg={
+            'labels': cfg['hrtf']['labels'],
+            'encoder_layer_sizes': cfg['hrtf']['encoder_layer_sizes'],
+            'decoder_layer_sizes': cfg['hrtf']['decoder_layer_sizes'],
+            'latent_size': cfg['hrtf']['latent_size'],
+            }
+        ).to(device)
+        cvae_path= r"weights/version_13/checkpoints/epoch=128-step=384677.ckpt"
+        cvae_checkpoint = torch.load(cvae_path, map_location=device)
+        cvae_state_dict = cvae_checkpoint['state_dict']
+        cvae_model.load_state_dict(cvae_state_dict)
+
+
+        vae_model = VAECfg(
+            input_size=[cfg['ears']['img_size'], cfg['ears']['img_size']],
+            cfg={
+                'input_channels': cfg['ears']['img_channels'],
+                'encoder_channels': cfg['ears']['encoder_channels'],
+                'latent_size': cfg['ears']['latent_size'],
+                'decoder_channels': cfg['ears']['decoder_channels'],
+                'kl_coeff': cfg['ears']['kl_coeff'],
+                'use_inception': cfg['ears']['use_inception'],
+                'repeat_per_block': cfg['ears']['repeat_per_block']
+            }
+        ).to(device)
+        vae_path= r"weights/version_17/checkpoints/epoch=925-step=35188.ckpt"
+        vae_checkpoint = torch.load(vae_path, map_location=device)
+        vae_state_dict = vae_checkpoint['state_dict']
+        vae_model.load_state_dict(vae_state_dict)
         
     def __getitem__(self, idx):
         batch = super().__getitem__(idx)
