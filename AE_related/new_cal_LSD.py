@@ -16,7 +16,9 @@ from AEconfig import pos_dim_for_each_row, \
 
 # 设备配置
 # current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
+# weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
+weightname = f"best_model.pth"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 batch_size = 32
@@ -44,7 +46,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load("D:\大学\大三下\大创项目\Sonicom--2d\HRTFAEweights_old\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device, weights_only=True))
 print("Load hrtf_encoder")
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
     model.eval()
@@ -181,6 +183,13 @@ np.savetxt('freq_data1.txt', freq_list, fmt='%.1f', header='Frequency (Hz)')
 # 保存LSD数据
 np.savetxt('lsd_data1.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
 np.savetxt('lsd_mean_data.txt', avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD (dB)')
+
+
+
+
+
+
+
 
 
 # # 绘制频率-LSD图
