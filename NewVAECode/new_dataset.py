@@ -476,3 +476,39 @@ class SonicomDataSetDNN(SonicomDataSet):
             "sin(elevation)": sin_elevations
         }
     
+class SonicomDataSetLSD(SonicomDataSet):
+    """只返回左耳HRTF和position的数据集"""
+    def __init__(self, hrtf_files, left_images, right_images,
+                 transform=None, calc_mean=True, 
+                 mode="left", provided_mean_left=None, provided_mean_right=None, status="train"):
+        super().__init__(hrtf_files, left_images, right_images,  
+                         transform=transform, calc_mean=calc_mean, 
+                         mode=mode, provided_mean_left=provided_mean_left, 
+                         provided_mean_right=provided_mean_right, status=status)
+        
+    def __getitem__(self, idx):
+        batch = super().__getitem__(idx)
+        position = batch["position"]
+        return {  
+            "hrtf": batch["hrtf"],
+            "sin(azimuth)": position[0],
+            "cos(azimuth)": position[1],
+            "sin(elevation)": position[2],
+            "left_image": batch["left_image"]
+        }
+    
+    @staticmethod
+    def collate_fn(batch):
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        left_image = torch.stack([item["left_image"] for item in batch])
+        sin_azimuths = torch.stack([item["sin(azimuth)"] for item in batch])
+        cos_azimuths = torch.stack([item["cos(azimuth)"] for item in batch])
+        sin_elevations = torch.stack([item["sin(elevation)"] for item in batch])
+        
+        return {
+            "hrtf": hrtfs,
+            "sin(azimuth)": sin_azimuths,
+            "cos(azimuth)": cos_azimuths,
+            "sin(elevation)": sin_elevations,
+            "left_image": left_image
+        }
