@@ -17,6 +17,7 @@ from utils import split_dataset, train_one_epoch
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import numpy as np
 
 def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
     total_loss = 0.0
@@ -37,25 +38,27 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
             hrtf_reconstructed = cvae_model.cvae.dec(z_hrtf,c)
 
             loss = mse_loss(hrtf, hrtf_reconstructed)
-            total_loss += loss.item()  # 累加损失
-            print(f"Batch {i + 1}: Loss = {loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
+            lsd_loss = np.sqrt(loss)
+            total_loss += lsd_loss.item()  # 累加损失
+            print(f"Batch {i + 1}: Loss = {lsd_loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
 
+            '''
             # 打印原始hrtf曲线
             plt.figure(figsize=(12, 6))
             plt.subplot(1, 2, 1)
-            plt.plot(hrtf.cpu().numpy(), label='Original HRTF')
+            plt.plot(hrtf[0, :].cpu().numpy(), label='Original HRTF')
             plt.title('Original HRTF Curve')
             plt.legend()
 
             # 打印重构的hrtf曲线
             plt.subplot(1, 2, 2)
-            plt.plot(hrtf_reconstructed.cpu().numpy(), label='Reconstructed HRTF')
+            plt.plot(hrtf_reconstructed[0 ,:].cpu().numpy(), label='Reconstructed HRTF')
             plt.title('Reconstructed HRTF Curve')
             plt.legend()
 
             plt.show()
             break  # 处理完第一个batch后退出循环
-
+            '''
 
     # 计算平均损失
     average_loss = total_loss / len(dataloader)
@@ -163,7 +166,7 @@ def main():
 
     test_loader = DataLoader(
         test_dataset,
-        batch_size=10,
+        batch_size=1,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
