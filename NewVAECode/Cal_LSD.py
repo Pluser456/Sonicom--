@@ -9,21 +9,20 @@ from argparse import ArgumentParser
 from PIL import Image
 from scipy.fft import rfftfreq
 from torchvision.transforms import Compose, ToTensor, Grayscale, Resize
-from vae_conv_cfg import VAECfg
-from vae_resnet_cfg import ResNetVAECfg
-from vae_incept_cfg import InceptionVAECfg
+from vae_incept_cfg import InceptionVAECfg as VAECfg
 from dnn_cfg import DNNCfg
 from cvae_dense_cfg import CVAECfg
 from new_dataset import SonicomDataSetLSD
 from utils import split_dataset, train_one_epoch
 from torchvision import transforms
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
     total_loss = 0.0
     mse_loss = nn.MSELoss()
     with torch.no_grad():  # 不需要计算梯度
-        for batch in dataloader:
+        for i, batch in enumerate(tqdm(dataloader, desc="Processing batches")):
             hrtf = batch["hrtf"].to(device)
             sin_azimuth = batch["sin(azimuth)"].to(device)
             cos_azimuth = batch["cos(azimuth)"].to(device)
@@ -39,6 +38,24 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
 
             loss = mse_loss(hrtf, hrtf_reconstructed)
             total_loss += loss.item()  # 累加损失
+            print(f"Batch {i + 1}: Loss = {loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
+
+            # 打印原始hrtf曲线
+            plt.figure(figsize=(12, 6))
+            plt.subplot(1, 2, 1)
+            plt.plot(hrtf.cpu().numpy(), label='Original HRTF')
+            plt.title('Original HRTF Curve')
+            plt.legend()
+
+            # 打印重构的hrtf曲线
+            plt.subplot(1, 2, 2)
+            plt.plot(hrtf_reconstructed.cpu().numpy(), label='Reconstructed HRTF')
+            plt.title('Reconstructed HRTF Curve')
+            plt.legend()
+
+            plt.show()
+            break  # 处理完第一个batch后退出循环
+
 
     # 计算平均损失
     average_loss = total_loss / len(dataloader)
@@ -69,8 +86,8 @@ def main():
     cvae_model.eval()
 
     vae_model = VAECfg(
-        input_size=[cfg['ears']['img_size'], cfg['ears']['img_size']],
-        cfg={
+            input_size=[cfg['ears']['img_size'], cfg['ears']['img_size']],
+            cfg={
                 'input_channels': cfg['ears']['img_channels'],
                 'encoder_channels': cfg['ears']['encoder_channels'],
                 'latent_size': cfg['ears']['latent_size'],
@@ -78,8 +95,8 @@ def main():
                 'kl_coeff': cfg['ears']['kl_coeff'],
                 'use_inception': cfg['ears']['use_inception'],
                 'repeat_per_block': cfg['ears']['repeat_per_block']
-        }
-    ).to(device)
+            }
+        ).to(device)
     vae_path= r"weights/version_17/checkpoints/epoch=925-step=35188.ckpt"
     vae_checkpoint = torch.load(vae_path, map_location=device)
     vae_state_dict = vae_checkpoint['state_dict']
@@ -143,24 +160,14 @@ def main():
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
-    
 
-    batch_train_test = next(iter(train_loader))
-    print("Batch keys:", batch_train_test.keys())  
-    print("Shape of z_ears:", batch_train_test["z_ears"].shape) 
-    print("Shape of z_hrtf:", batch_train_test["z_hrtf"].shape)
-    #print("Shape of position:", batch_train_test["position"].shape)     
-    # 输出为: Shape of z_ears: torch.Size([50, 1, 256]) Shape of z_hrtf: torch.Size([50, 1,32])
-    #         Shape of position: torch.Size([50, 1,3])
-
-    
     test_loader = DataLoader(
         test_dataset,
         batch_size=10,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    
+
     LSD = calculate_lsd(test_loader, cvae_model, vae_model, dnn_model, device)
     print("LSD", LSD)
 
