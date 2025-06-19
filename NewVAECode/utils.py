@@ -103,8 +103,8 @@ def split_dataset(image_dir: str, hrtf_dir: str, test_indices: list = None) -> d
     right_test = [x for i, x in enumerate(right_image_list) if i in test_indices]
     
     # 从图像名称中提取编号
-    train_image_numbers = [int(img.split('_')[0][1:]) for img in left_train]
-    test_image_numbers = [int(img.split('_')[0][1:]) for img in left_test]
+    train_image_numbers = [int(img.split('_')[0][1:]) for img in right_train]
+    test_image_numbers = [int(img.split('_')[0][1:]) for img in right_test]
     
     # 过滤HRTF文件列表
     train_hrtf_list = [x for x in os.listdir(hrtf_dir) if int(x.split('.')[0][1:]) in train_image_numbers]

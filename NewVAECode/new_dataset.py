@@ -15,7 +15,7 @@ from cvae_dense_cfg import CVAECfg
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
-                 status="train", positions_chosen_num=793,
+                 status="train", positions_chosen_num=2562,
                  transform=None, 
                  calc_mean=True, use_diff=False, inputform="image",
                  mode="both", provided_mean_left=None, provided_mean_right=None):
@@ -152,8 +152,9 @@ class SonicomDataSet(Dataset):
         """获取图像张量"""
         left_tensors = []
         right_tensors = []
+        left_image_path=right_image_path
         for _, (left_path, right_path) in enumerate(zip(left_image_path, right_image_path)):
-            left_image = Image.open(left_path).convert('L')
+            left_image = Image.open(left_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
             right_image = Image.open(right_path).convert('L').transpose(Image.FLIP_LEFT_RIGHT)
             left_image_tensor = self.transform(left_image).unsqueeze(0)
             right_image_tensor = self.transform(right_image).unsqueeze(0)
