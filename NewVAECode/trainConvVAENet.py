@@ -40,8 +40,8 @@ def main(args):
     ).to(device)
 
     # 数据集准备（保持原有逻辑）
-    image_dir = "Ear_image_gray"
-    hrtf_dir = "FFT_HRTF"
+    image_dir = "Ear_image_gray_Wi"
+    hrtf_dir = "FFT_HRTF_Wi"
     dataset_paths = split_dataset(image_dir, hrtf_dir)
     
     # 数据转换（保持通道数一致）

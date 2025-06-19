@@ -24,7 +24,7 @@
     "hrtf": {
         "model_type": "cvae_dense",
         "model_ckpt_path": "weights/version_13/checkpoints/epoch=128-step=384677.ckpt",
-        "nfft": 108,
+        "nfft": 90,
         "model_cfg_path": "./configs/models/cvae_dense/default.json",
         "labels": ["sin(azimuth)", "cos(azimuth)", "sin(elevation)"],  
         "encoder_layer_sizes": [128, 64, 32],  
