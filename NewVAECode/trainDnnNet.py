@@ -113,7 +113,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # 新增配置文件参数
-    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_median.json')
+    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_widespread.json')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--model-name', default='vae_conv', help='Output model name')

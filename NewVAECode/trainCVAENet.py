@@ -40,8 +40,8 @@ def main(args):
     # print()
 
     # 数据集准备（保持原有逻辑）
-    image_dir = "Ear_image_gray"
-    hrtf_dir = "FFT_HRTF"
+    image_dir = "Ear_image_gray_Wi"
+    hrtf_dir = "FFT_HRTF_Wi"
     dataset_paths = split_dataset(image_dir, hrtf_dir)
     
     # 数据转换（保持通道数一致）
@@ -115,13 +115,13 @@ def main(args):
         model.training_epoch_end()
     '''    
     # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="cvae_5.12_model")
+    logger = TensorBoardLogger("tb_logs", name="cvae_ws_6.19_model")
 
     trainer = Trainer(
         max_epochs=num_epochs,
         logger=logger,
-        gpus=1,
-        accelerator='gpu',
+        #gpus=1,
+        #accelerator='gpu',
         val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
     )
 
@@ -131,7 +131,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # 新增配置文件参数
-    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_median.json')
+    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_widespread.json')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--model-name', default='vae_conv', help='Output model name')
