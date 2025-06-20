@@ -390,7 +390,7 @@ class SonicomDataSetDNN(SonicomDataSet):
                          provided_mean_right=provided_mean_right, status=status)
         
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        cfg_path = r"NewVAECode/configs/edges_median.json"
+        cfg_path = r"NewVAECode/configs/edges_widespread.json"
         with open(cfg_path, 'r') as f:
             cfg = json.load(f)
 
@@ -403,7 +403,7 @@ class SonicomDataSetDNN(SonicomDataSet):
             'latent_size': cfg['hrtf']['latent_size'],
             }
         ).to(device)
-        cvae_path= r"weights/version_13/checkpoints/epoch=128-step=384677.ckpt"
+        cvae_path= r"weights_ws/version_7/checkpoints/epoch=2-step=76247.ckpt"
         cvae_checkpoint = torch.load(cvae_path, map_location=device)
         cvae_state_dict = cvae_checkpoint['state_dict']
         self.cvae_model.load_state_dict(cvae_state_dict)
@@ -422,7 +422,7 @@ class SonicomDataSetDNN(SonicomDataSet):
                 'repeat_per_block': cfg['ears']['repeat_per_block']
             }
         ).to(device)
-        vae_path= r"weights/version_17/checkpoints/epoch=925-step=35188.ckpt"
+        vae_path= r"weights_ws/version_1/checkpoints/epoch=54-step=10944.ckpt"
         vae_checkpoint = torch.load(vae_path, map_location=device)
         vae_state_dict = vae_checkpoint['state_dict']
         self.vae_model.load_state_dict(vae_state_dict)
