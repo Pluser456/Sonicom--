@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     with open(args.cfg_path, 'r') as f:
         cfg = json.load(f)
 

@@ -38,7 +38,10 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
             hrtf_reconstructed = cvae_model.cvae.dec(z_hrtf,c)
 
             loss = mse_loss(hrtf, hrtf_reconstructed)
-            lsd_loss = np.sqrt(loss)
+            if loss.is_cuda:
+                loss = loss.cpu()
+            lsd_loss = np.sqrt(loss.numpy())
+
             total_loss += lsd_loss.item()  # 累加损失
             print(f"Batch {i + 1}: Loss = {lsd_loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
 

@@ -17,7 +17,7 @@ import pandas as pd
 
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    
+    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
     # 创建保存目录
     #os.makedirs("./CVAEweights", exist_ok=True)
     tb_writer = SummaryWriter()
