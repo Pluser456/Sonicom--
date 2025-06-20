@@ -35,6 +35,13 @@ def main(args):
             'latent_size': cfg['hrtf']['latent_size'],
         }
     ).to(device)
+
+    cvae_path= r"weights_ws/version_7/checkpoints/epoch=2-step=76247.ckpt"
+    cvae_checkpoint = torch.load(cvae_path, map_location=device)
+    cvae_state_dict = cvae_checkpoint['state_dict']
+    model.load_state_dict(cvae_state_dict)
+    model = model.to(device)
+
     #print(f"Labels type: {type(cfg['hrtf']['labels'])}, Labels: {cfg['hrtf']['labels']}")
     # print(model.cvae)
     # print()

@@ -39,6 +39,12 @@ def main(args):
         }
     ).to(device)
 
+    vae_path= r"weights_ws/version_1/checkpoints/epoch=54-step=10944.ckpt"
+    vae_checkpoint = torch.load(vae_path, map_location=device)
+    vae_state_dict = vae_checkpoint['state_dict']
+    model.load_state_dict(vae_state_dict)
+    model = model.to(device)
+
     # 数据集准备（保持原有逻辑）
     image_dir = "Ear_image_gray_Wi"
     hrtf_dir = "FFT_HRTF_Wi"

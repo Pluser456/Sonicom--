@@ -149,7 +149,7 @@ class VAECfg(pl.LightningModule):
         return self.vae(x)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)#学习率为1e-5
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)#学习率为1e-5
         lr_scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5624, patience=50, cooldown=25),
             'monitor': 'val_loss'
