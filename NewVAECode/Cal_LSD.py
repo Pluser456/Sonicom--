@@ -20,6 +20,7 @@ from tqdm import tqdm
 import numpy as np
 
 def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
+    #LSD = 3.62264050
     total_loss = 0.0
     mse_loss = nn.MSELoss()
     with torch.no_grad():  # 不需要计算梯度
