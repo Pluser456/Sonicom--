@@ -68,7 +68,7 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
 def main():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    cfg_path = r"NewVAECode/configs/edges_median.json"
+    cfg_path = r"NewVAECode/configs/edges_widespread.json"
     with open(cfg_path, 'r') as f:
         cfg = json.load(f)
 
@@ -81,7 +81,7 @@ def main():
             'latent_size': cfg['hrtf']['latent_size'],
             }
     ).to(device)
-    cvae_path= r"weights/version_13/checkpoints/epoch=128-step=384677.ckpt"
+    cvae_path= r"weights_ws/version_7/checkpoints/epoch=2-step=76247.ckpt"
     cvae_checkpoint = torch.load(cvae_path, map_location=device)
     cvae_state_dict = cvae_checkpoint['state_dict']
     cvae_model.load_state_dict(cvae_state_dict)
@@ -100,7 +100,7 @@ def main():
                 'repeat_per_block': cfg['ears']['repeat_per_block']
             }
         ).to(device)
-    vae_path= r"weights/version_17/checkpoints/epoch=925-step=35188.ckpt"
+    vae_path= r"weights_ws/version_1/checkpoints/epoch=54-step=10944.ckpt"
     vae_checkpoint = torch.load(vae_path, map_location=device)
     vae_state_dict = vae_checkpoint['state_dict']
     vae_model.load_state_dict(vae_state_dict)
@@ -116,7 +116,7 @@ def main():
             'dropout_rate': cfg['latent']['dropout_rate'],
         }
     ).to(device)
-    dnn_path= r"weights/version_2/checkpoints/epoch=44-step=134189.ckpt"
+    dnn_path= r"weights_ws/version_4/checkpoints/epoch=0-step=25415.ckpt"
     dnn_checkpoint = torch.load(dnn_path, map_location=device)
     dnn_state_dict = dnn_checkpoint['state_dict']
     dnn_model.load_state_dict(dnn_state_dict)
@@ -124,8 +124,8 @@ def main():
     dnn_model.eval()      
 
 
-    image_dir = "Ear_image_gray"
-    hrtf_dir = "FFT_HRTF"
+    image_dir = "Ear_image_gray_Wi"
+    hrtf_dir = "FFT_HRTF_Wi"
     dataset_paths = split_dataset(image_dir, hrtf_dir)
     
     data_transform = transforms.Compose([
