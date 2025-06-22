@@ -98,7 +98,7 @@ codebook_params = list(model.vq_layer.parameters())
 
 optimizer_codebook = optim.SGD(codebook_params, lr=1e-3) # 码本使用更高的学习率
 
-optimizer_model = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
+optimizer_model = optim.AdamW(model.parameters(), lr=5e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
 num_epochs = 120
 scheduler = get_cosine_schedule_with_warmup(optimizer_model, num_warmup_steps=6, num_training_steps=num_epochs)
