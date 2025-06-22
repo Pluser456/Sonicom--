@@ -1,11 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-theta = "20_54"
+theta = "90_0"
 # 从文件导入数据
 freq_list = np.loadtxt('HRTF可视化\\freq_data.txt')
 freq_list = freq_list / 1000  # 转换为kHz单位
-avg_lsd_per_freq = np.loadtxt(f'HRTF可视化\hrtf_base_{theta}.txt')      # Baseline
+# avg_lsd_per_freq = np.loadtxt(f'HRTF可视化\hrtf_base_{theta}.txt')      # Baseline
+avg_lsd_per_freq = np.loadtxt(f'HRTF可视化\hrtf_VAE_{theta}.txt')      # Baseline
+
 avg_lsd_per_freq1 = np.loadtxt(f'HRTF可视化\hrtf_AE_{theta}.txt')      # PRTFNet
 avg_lsd_per_freq_of_mean = np.loadtxt(f'HRTF可视化\hrtf_true_{theta}.txt') # True
 
@@ -53,7 +55,7 @@ plt.plot(freq_list, avg_lsd_per_freq,
 
 # 坐标轴设置
 plt.xlim(min(freq_list)*0.9, max(freq_list)*1.1)  # 留出10%空白边距
-plt.ylim(0,max(avg_lsd_per_freq_of_mean)+1)                                  # 根据你的数据示例设置
+plt.ylim(min(avg_lsd_per_freq_of_mean)-1,max(avg_lsd_per_freq_of_mean)+1)                                  # 根据你的数据示例设置
 
 # 标签与标题
 plt.xlabel('Frequency(kHz)', fontsize=label_fontsize, labelpad=8)  # 改为kHz单位
@@ -79,7 +81,7 @@ plt.legend(fontsize=legend_fontsize,
            fancybox=False)             # 不使用圆角边框
 
 # 设置标题为(0,0)
-plt.title("(20°, 54°)", fontsize=title_fontsize+4, 
+plt.title("(90°, 0°)", fontsize=title_fontsize+4, 
            pad=15,  # 增加标题与图表之间的垂直距离
            y=0.88)  # 略微提升标题位置(y在1.0是默认位置)
 

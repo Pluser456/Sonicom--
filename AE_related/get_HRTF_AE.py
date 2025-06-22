@@ -81,10 +81,10 @@ def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
             # 转换到对数域 (dB)
             log_target = 20 * torch.log10(targets)
             if usediff:
-                pred = torch.abs(outputs + meanloghrtf)
+                pred = outputs + meanloghrtf
             else:
-                pred = torch.abs(outputs)
-            log_target = torch.abs(log_target)
+                pred = outputs
+            log_target = log_target
 
             # 将当前batch的结果添加到列表
             all_preds.append(pred)
@@ -156,8 +156,8 @@ idx_0_90 = 11
 idx_0_80 = 414
 idx_90_0 = 304
 idx_20_54 = 500
-np.savetxt('hrtf_AE_20_54.txt', pred_log_hrtf[idx_20_54,:], fmt='%.1f', header='Frequency (Hz)')
-np.savetxt('hrtf_true_20_54.txt', true_log_hrtf[idx_20_54,:], fmt='%.1f', header='Frequency (Hz)')
+np.savetxt('hrtf_AE_90_0.txt', pred_log_hrtf[idx_90_0,:], fmt='%.1f', header='Frequency (Hz)')
+np.savetxt('hrtf_true_90_0.txt', true_log_hrtf[idx_90_0,:], fmt='%.1f', header='Frequency (Hz)')
 
 
 
