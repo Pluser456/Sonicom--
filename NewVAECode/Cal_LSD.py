@@ -21,6 +21,7 @@ import numpy as np
 
 def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
     #LSD = 3.62264050
+    #LSD = 3.8496014293173686
     total_loss = 0.0
     mse_loss = nn.MSELoss()
     with torch.no_grad():  # 不需要计算梯度
@@ -135,7 +136,7 @@ def main():
             'latent_size': cfg['hrtf']['latent_size'],
             }
     ).to(device)
-    cvae_path= r"weights_ws/version_7/checkpoints/epoch=2-step=76247.ckpt"
+    cvae_path= r"weights_ws2/version_8/checkpoints/epoch=3-step=203323.ckpt"
     cvae_checkpoint = torch.load(cvae_path, map_location=device)
     cvae_state_dict = cvae_checkpoint['state_dict']
     cvae_model.load_state_dict(cvae_state_dict)
@@ -154,7 +155,7 @@ def main():
                 'repeat_per_block': cfg['ears']['repeat_per_block']
             }
         ).to(device)
-    vae_path= r"weights_ws/version_1/checkpoints/epoch=54-step=10944.ckpt"
+    vae_path= r"weights_ws2/version_1/checkpoints/epoch=23-step=4775.ckpt"
     vae_checkpoint = torch.load(vae_path, map_location=device)
     vae_state_dict = vae_checkpoint['state_dict']
     vae_model.load_state_dict(vae_state_dict)
@@ -170,7 +171,7 @@ def main():
             'dropout_rate': cfg['latent']['dropout_rate'],
         }
     ).to(device)
-    dnn_path= r"weights_ws/version_4/checkpoints/epoch=0-step=25415.ckpt"
+    dnn_path= r"weights_ws2/version_5/checkpoints/epoch=2-step=152492.ckpt"
     dnn_checkpoint = torch.load(dnn_path, map_location=device)
     dnn_state_dict = dnn_checkpoint['state_dict']
     dnn_model.load_state_dict(dnn_state_dict)

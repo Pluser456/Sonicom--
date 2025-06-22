@@ -30,12 +30,13 @@ def main(args):
             'dropout_rate': cfg['latent']['dropout_rate'],
         }
     ).to(device)
+    '''
     dnn_path= r"weights_ws/version_4/checkpoints/epoch=0-step=25415.ckpt"
     dnn_checkpoint = torch.load(dnn_path, map_location=device)
     dnn_state_dict = dnn_checkpoint['state_dict']
     model.load_state_dict(dnn_state_dict)
     model = model.to(device)
-
+    '''
     # 数据集准备（保持原有逻辑）
     image_dir = "Ear_image_gray_Wi"
     hrtf_dir = "FFT_HRTF_Wi"
@@ -103,11 +104,13 @@ def main(args):
     num_epochs = 480*5
 
     # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="dnn_ws_6.20_model")
+    logger = TensorBoardLogger("tb_logs", name="dnn_ws_6.21_model")
 
     trainer = Trainer(
         max_epochs=num_epochs,
         logger=logger,
+        gpus=1,
+        accelerator='gpu',
         val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
     )
 
