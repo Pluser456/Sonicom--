@@ -69,6 +69,56 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
     print(f"Average MSE Loss: {average_loss}")
     return average_loss
 
+def calculate_txt(dataloader, cvae_model, vae_model, dnn_model, device):
+    idx_0_0 = 1956
+    idx_0_90 = 11
+    idx_0_80 = 414
+    idx_90_0 = 199
+    idx_20_54 = 924
+    with torch.no_grad():  # 不需要计算梯度
+        for i, batch in enumerate(tqdm(dataloader, desc="Processing batches")):
+            print(f"Batch {i + 1}")
+            if i == idx_0_0 or i == idx_0_90 or i == idx_0_80 or i == idx_90_0 or i == idx_20_54:
+                hrtf = batch["hrtf"].to(device)
+                sin_azimuth = batch["sin(azimuth)"].to(device)
+                cos_azimuth = batch["cos(azimuth)"].to(device)
+                sin_elevation = batch["sin(elevation)"].to(device)
+                left_image = batch["left_image"].to(device)
+                c = torch.stack([sin_azimuth, cos_azimuth, sin_elevation], dim=-1).float()
+
+                h_vae=vae_model.vae.encoder(left_image)
+                z_ears, mu, logvar = vae_model.vae._bottleneck(h_vae)
+                z_ears_c = torch.cat((z_ears, c), dim=-1)
+                z_hrtf = dnn_model.forward(z_ears_c)
+                hrtf_reconstructed = cvae_model.cvae.dec(z_hrtf,c)
+                # 打印原始hrtf曲线
+                plt.figure(figsize=(12, 6))
+                plt.subplot(1, 2, 1)
+                plt.plot(abs(hrtf[0, :].cpu().numpy()), label='Original HRTF')
+                plt.title('Original HRTF Curve')
+                plt.legend()
+
+                # 打印重构的hrtf曲线
+                plt.subplot(1, 2, 2)
+                plt.plot(abs(hrtf_reconstructed[0 ,:].cpu().numpy()), label='Reconstructed HRTF')
+                plt.title('Reconstructed HRTF Curve')
+                plt.legend()
+                plt.show()
+                if i == idx_0_0:
+                    np.savetxt('hrtf_VAE_0_0.txt', hrtf_reconstructed[0, :].cpu().numpy(), fmt='%.1f', header='Frequency (Hz)')
+                elif i == idx_0_90:
+                    np.savetxt('hrtf_VAE_0_90.txt', hrtf_reconstructed[0, :].cpu().numpy(), fmt='%.1f', header='Frequency (Hz)')
+                elif i == idx_0_80:
+                    np.savetxt('hrtf_VAE_0_80.txt', hrtf_reconstructed[0, :].cpu().numpy(), fmt='%.1f', header='Frequency (Hz)')
+                elif i == idx_90_0:
+                    np.savetxt('hrtf_VAE_90_0.txt', hrtf_reconstructed[0, :].cpu().numpy(), fmt='%.1f', header='Frequency (Hz)')
+                elif i == idx_20_54:
+                    np.savetxt('hrtf_VAE_20_54.txt', hrtf_reconstructed[0, :].cpu().numpy(), fmt='%.1f', header='Frequency (Hz)')
+
+            if i >2562:
+                break  
+
+
 def main():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -175,8 +225,10 @@ def main():
         collate_fn=test_dataset.collate_fn
     )
 
-    LSD = calculate_lsd(test_loader, cvae_model, vae_model, dnn_model, device)
-    print("LSD", LSD)
+    #LSD = calculate_lsd(test_loader, cvae_model, vae_model, dnn_model, device)
+    #print("LSD", LSD)
+
+    calculate_txt(test_loader, cvae_model, vae_model, dnn_model, device)
 
 if __name__ == '__main__':
     main()
