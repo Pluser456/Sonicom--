@@ -10,7 +10,7 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 
 # 设备配置
-current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 weightname = "best_model.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

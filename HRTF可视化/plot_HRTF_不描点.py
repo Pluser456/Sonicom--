@@ -1,61 +1,75 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-theta = "90_0"
+theta = "0_0"
 # 从文件导入数据
 freq_list = np.loadtxt('HRTF可视化\\freq_data.txt')
 freq_list = freq_list / 1000  # 转换为kHz单位
 # avg_lsd_per_freq = np.loadtxt(f'HRTF可视化\hrtf_base_{theta}.txt')      # Baseline
-avg_lsd_per_freq = np.loadtxt(f'HRTF可视化\hrtf_VAE_{theta}.txt')      # Baseline
+HRTF_VAE = np.loadtxt(f'HRTF可视化\hrtf_VAE_{theta}.txt')      # Baseline
 
-avg_lsd_per_freq1 = np.loadtxt(f'HRTF可视化\hrtf_AE_{theta}.txt')      # PRTFNet
-avg_lsd_per_freq_of_mean = np.loadtxt(f'HRTF可视化\hrtf_true_{theta}.txt') # True
+HRTF_VQVAE = np.loadtxt(f'HRTF可视化\hrtf_AE_{theta}.txt')      # PRTFNet
+HRTF_ResNet = np.loadtxt(f'HRTF可视化\hrtf_base_{theta}.txt')      # PRTFNet
+
+HRTF_TRUE = np.loadtxt(f'HRTF可视化\hrtf_true_{theta}.txt') # True
 
 #-------------------------
 # 字体与字号全局设置
 #-------------------------
 plt.rcParams['font.family'] = 'Times New Roman'  # 全局字体设置
-title_fontsize = 22     # 标题字号
-label_fontsize = 19     # 坐标轴标签字号
-tick_fontsize = 17      # 坐标轴刻度字号
-linewidth = 1.5         # 线条粗细
+title_fontsize = 28    # 标题字号
+label_fontsize = 26    # 坐标轴标签字号
+tick_fontsize = 26      # 坐标轴刻度字号
+linewidth = 1.6         # 线条粗细
 markersize = 8          # 数据点大小
-legend_fontsize = 19   # 图例字号
+legend_fontsize = 26  # 图例字号
 #------------------------- 
 
 # 创建图形
 plt.figure(figsize=(10, 6), dpi=120)  # 设置更高分辨率
 
 # 绘制True曲线 (黑色实线，无标记)
-plt.plot(freq_list, avg_lsd_per_freq_of_mean, 
+plt.plot(freq_list, HRTF_TRUE, 
          'k-',                   # 黑色实线
          linewidth=1.4,            # 稍粗的线宽
          markersize=0,           # 无标记
          label = "True")
 
 # 绘制PRTFNet曲线 (蓝色虚线，带标记)
-plt.plot(freq_list, avg_lsd_per_freq1, 
-         'b--',                  # 蓝色虚线
+plt.plot(freq_list, HRTF_VQVAE, 
+         '-*',                  # 蓝色虚线
+         color='#D95319', 
          linewidth=linewidth, 
          markersize=markersize,
          markerfacecolor='none', # 空心标记
-         markeredgecolor='blue',  # 蓝色边框
-         markeredgewidth=1.5,
-         label = "VQVAE")
+         markeredgecolor='#D95319',  # 蓝色边框
+         markeredgewidth=1.1,
+         label = "Ours")
 
 # 绘制Baseline曲线 (红色虚线，带标记)
-plt.plot(freq_list, avg_lsd_per_freq, 
-         'r--',                  # 红色虚线
+plt.plot(freq_list, HRTF_VAE, 
+         '--',   
+         color='#0072BD',# 红色虚线
          linewidth=linewidth, 
          markersize=markersize,
          markerfacecolor='none', # 空心标记
          markeredgecolor='red',  # 红色边框
          markeredgewidth=1.5,
-         label = "Baseline")
+         label = "VAE")
+
+plt.plot(freq_list, HRTF_ResNet, 
+         'g--',                  # 绿色虚线
+         linewidth=linewidth, 
+         markersize=markersize,
+         markerfacecolor='none', # 空心标记
+         markeredgecolor='green',  # 绿色边框
+         markeredgewidth=1.5,
+         label = "ResNet")
+
 
 # 坐标轴设置
 plt.xlim(min(freq_list)*0.9, max(freq_list)*1.1)  # 留出10%空白边距
-plt.ylim(min(avg_lsd_per_freq_of_mean)-1,max(avg_lsd_per_freq_of_mean)+1)                                  # 根据你的数据示例设置
+plt.ylim(min(HRTF_TRUE)-1,max(HRTF_TRUE)+2)                                  # 根据你的数据示例设置
 
 # 标签与标题
 plt.xlabel('Frequency(kHz)', fontsize=label_fontsize, labelpad=8)  # 改为kHz单位
@@ -81,7 +95,7 @@ plt.legend(fontsize=legend_fontsize,
            fancybox=False)             # 不使用圆角边框
 
 # 设置标题为(0,0)
-plt.title("(90°, 0°)", fontsize=title_fontsize+4, 
+plt.title("(0°, 0°)", fontsize=title_fontsize+4, 
            pad=15,  # 增加标题与图表之间的垂直距离
            y=0.88)  # 略微提升标题位置(y在1.0是默认位置)
 

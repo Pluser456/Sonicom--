@@ -150,16 +150,53 @@ true_log_hrtf = true_log_hrtf.squeeze(0)
 pred_log_hrtf = pred_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 true_log_hrtf = true_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 
+# 1. 读取P00013_results.txt文件
+data = np.loadtxt('P00013_results.txt', skiprows=1)  # 跳过表头行
+indices = data[:, 0].astype(int) - 1  # 索引修正
+angles = data[:, 1]                   # 角度(度)
 
-idx_0_0 = 1956
-idx_0_90 = 11
-idx_0_80 = 414
-idx_90_0 = 304
-idx_20_54 = 500
-np.savetxt('hrtf_AE_90_0.txt', pred_log_hrtf[idx_90_0,:], fmt='%.1f', header='Frequency (Hz)')
-np.savetxt('hrtf_true_90_0.txt', true_log_hrtf[idx_90_0,:], fmt='%.1f', header='Frequency (Hz)')
+# 2. 加载频率列表
+freq_list = np.loadtxt(os.path.join('HRTF可视化', 'freq_data.txt'))
+freq_list_kHz = freq_list / 1000  # 转换为kHz单位
 
+# 筛选有效角度
+valid_mask = (angles >= -180) & (angles <= 180)
+valid_angles = angles[valid_mask]
+valid_indices = indices[valid_mask]
 
+# 按角度降序排序（最大角度排在最上面）
+sort_order = np.argsort(valid_angles)[::-1]  # 获取降序索引
+sorted_angles = valid_angles[sort_order]      # 应用排序
+sorted_indices = valid_indices[sort_order]    # 保持对应的索引
+
+# 创建热图矩阵（使用排序后的数据）
+hrtf_matrix = true_log_hrtf[sorted_indices]    # 形状为 (n_angles, n_frequencies)
+
+# 创建热图（注意Y轴范围使用排序后的角度值）
+im = plt.imshow(hrtf_matrix,
+                extent=[freq_list_kHz.min(), freq_list_kHz.max(), 
+                        sorted_angles.min(), sorted_angles.max()],
+                aspect='auto', 
+                origin='lower',  # 原点在左下角
+                cmap='viridis')
+
+# 设置坐标轴标签
+plt.xlabel('Frequency (kHz)', fontsize=14)
+plt.ylabel('Angle θ (degrees)', fontsize=14)
+
+# 添加颜色条
+cbar = plt.colorbar(im)
+cbar.set_label('dB', fontsize=14)
+
+# 设置坐标轴范围
+plt.xlim(freq_list_kHz.min(), freq_list_kHz.max())
+plt.ylim(valid_angles.min(), valid_angles.max())
+
+# 添加标题
+plt.title('HRTF Magnitude (dB) vs Frequency and Angle', fontsize=16)
+
+plt.tight_layout()
+plt.show()
 
 
 

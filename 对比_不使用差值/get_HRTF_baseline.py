@@ -166,10 +166,12 @@ def main(args, mode = "right"):
 
     idx_0_0 = 1956
     idx_0_90 = 11
-    idx_0_80 = 414
-    idx_90_0 = 304
+    # idx_0_80 = 414
+    # idx_90_0 = 304
     idx_20_54 = 500
-    np.savetxt('hrtf_base_90_0.txt', pred_log_hrtf[idx_90_0,:], fmt='%.1f', header='Frequency (Hz)')
+    np.savetxt('hrtf_base_0_0.txt', pred_log_hrtf[idx_0_0,:], fmt='%.1f', header='Frequency (Hz)')
+    np.savetxt('hrtf_base_0_90.txt', pred_log_hrtf[idx_0_90,:], fmt='%.1f', header='Frequency (Hz)')
+    np.savetxt('hrtf_base_20_54.txt', pred_log_hrtf[idx_20_54,:], fmt='%.1f', header='Frequency (Hz)')
     # np.savetxt('hrtf_true_0_0.txt', true_log_hrtf[idx_0_0,:], fmt='%.1f', header='Frequency (Hz)')
 
 

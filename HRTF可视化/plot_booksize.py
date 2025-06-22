@@ -17,10 +17,11 @@ markersize = 10          # 数据点大小
 #-------------------------
 
 # 数据准备
-codebook_sizes = [4, 6, 8, 16, 32, 64, 128, 256, 512]
+codebook_sizes = [4, 6, 8, 16, 32, 64, 128]
 reconstruction_losses = [11.95889703, 11.7882678, 11.53199933, 
                         11.13526226, 10.98240986, 10.9420694, 
-                        10.88412229, 10.98642505, 10.95317226]
+                        10.88412229]
+reconstruction_losses = np.sqrt(reconstruction_losses)  # 转换为平方根形式
 
 plt.figure(figsize=(9, 5.5), dpi=120)
 
@@ -36,7 +37,7 @@ plt.plot(codebook_sizes, reconstruction_losses,
 
 # 设置对数横坐标
 plt.xscale('log')
-plt.xlim(3, 600)
+plt.xlim(3, 200)
 
 # 手动设置横坐标刻度和标签（避免科学计数法）
 plt.xticks(codebook_sizes, [str(x) for x in codebook_sizes], 
@@ -47,7 +48,7 @@ plt.ylim(min(reconstruction_losses) * 0.995, max(reconstruction_losses) * 1.005)
 
 # 添加标签
 plt.xlabel('Codebook Size', fontsize=label_fontsize, labelpad=8)
-plt.ylabel('Reconstruction Loss', fontsize=label_fontsize, labelpad=8)
+plt.ylabel('Reconstruction Loss(LSD)', fontsize=label_fontsize, labelpad=8)
 # plt.title('Reconstruction Loss vs. Codebook Size', 
 #           fontsize=title_fontsize, pad=15)
 
@@ -82,7 +83,7 @@ for i, (x, y) in enumerate(zip(codebook_sizes, reconstruction_losses)):
     plt.annotate(f'{y:.3f}', 
                 (x, y),
                 textcoords="offset points", 
-                xytext=(0, 8), 
+                xytext=(28, 3), 
                 ha='center',
                 fontsize=tick_fontsize - 2)
 
