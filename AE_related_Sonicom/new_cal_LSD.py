@@ -19,20 +19,20 @@ print(f"当前码本大小为：{num_codebook_embeddings}")
 batch_size = 32
 usediff = False  # 是否使用差分数据
 
-current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 if current_model == "3DResNet":
-    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
+    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D_So.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNN3Dweights"
-    ear_dir = "Ear_voxel_Wi"
+    ear_dir = "Ear_voxel"
     isANP = False
     model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
     inputform = "voxel"
 elif current_model == "2DResNet":
-    weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
+    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_So.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNNweights"
-    ear_dir = "Ear_image_gray_Wi"
+    ear_dir = "Ear_image_gray"
     isANP = False
     model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
     inputform = "image"
@@ -54,7 +54,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights_So\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True), strict=False)
 print("Load hrtf_encoder")
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
     model.eval()
@@ -100,10 +100,9 @@ res_list = []
 pred_list = []
 true_list = []
 
+hrtf_dir = "FFT_HRTF"
 
-hrtf_dir = "FFT_HRTF_Wi"
-
-dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
 # 获取各个数据集
 right_test = dataset_paths['right_test']
 
@@ -117,7 +116,7 @@ train_dataset = SonicomDataSet(
     calc_mean=True,
     status="test", # 因为这里希望坐标是按顺序输入的
     inputform=inputform,
-    mode="right"
+    mode="left"
 )
 
 
@@ -130,7 +129,7 @@ for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
     val_dataset = SingleSubjectDataSet( dataset_paths["test_hrtf_list"],
                                         dataset_paths["left_test"],
                                         dataset_paths["right_test"],
-                                        mode="right",
+                                        mode="left",
                                         train_log_mean_hrtf_left=log_mean_hrtf_left,
                                         train_log_mean_hrtf_right=log_mean_hrtf_right,
                                         subject_id=hrtfid,
@@ -165,13 +164,14 @@ for freq_idx in range(len(freq_list)):
 print("\n-----------------contrast with mean HRTF-----------------\n")
 res_list_mean = []
 # 将均值转为tensor
-log_mean_hrtf_right = torch.tensor(np.abs(log_mean_hrtf_right), dtype=torch.float32).to(device)
-log_mean_hrtf_right = log_mean_hrtf_right.unsqueeze(0)  # 添加batch维度
+log_mean_hrtf = log_mean_hrtf_left
+log_mean_hrtf = torch.tensor(np.abs(log_mean_hrtf), dtype=torch.float32).to(device)
+log_mean_hrtf = log_mean_hrtf.unsqueeze(0)  # 添加batch维度
 
 for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
     # 之前已经计算预测HRTF和真实HRTF之间LSD，
     # 现在计算平均HRTF和真实HRTF之间LSD
-    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_right - true_tensor[hrtfid-1, :, :]) ** 2)).item()
+    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf - true_tensor[hrtfid-1, :, :]) ** 2)).item()
     res_list_mean.append(lsd_of_mean)
     print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
 
@@ -180,7 +180,7 @@ print(f"Mean LSD of mean HRTF: {np.mean(res_list_mean)}")
 avg_lsd_per_freq_of_mean = np.zeros(len(freq_list))
 for freq_idx in range(len(freq_list)):
     # 计算平均LSD
-    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_right[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
+    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
     avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
     # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 

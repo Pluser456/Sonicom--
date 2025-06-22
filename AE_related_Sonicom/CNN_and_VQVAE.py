@@ -21,6 +21,7 @@ def main():
     current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ae_modelpath = f"HRTFAEweights_So/diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth"
     usediff = False  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
@@ -37,21 +38,23 @@ def main():
         inputform ="voxel"
     elif current_model == "3DResNet":
         weightdir = "./CNN3Dweights"
-        ear_dir = "Ear_voxel_Wi"
+        ear_dir = "Ear_voxel"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
+        modelsavepath = f"{weightdir}/best_model_codebook_size_{num_codebook_embeddings}_3D_So.pth"
         # positions_chosen_num = 793
         model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
         weightdir = "./CNNweights"
-        ear_dir = "Ear_image_gray_Wi"
+        ear_dir = "Ear_image_gray"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
+        modelsavepath = f"{weightdir}/best_model_codebook_size_{num_codebook_embeddings}_So.pth"
         # positions_chosen_num = 793
         model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
         inputform = "image"
@@ -62,9 +65,10 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+    dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
 
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=usediff, status="test",mode="right")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, ae_modelpath=ae_modelpath, 
+                                     calc_mean=usediff, status="test",mode="left")
 
 
     # 创建数据集
@@ -75,11 +79,12 @@ def main():
         use_diff=usediff,
         calc_mean=usediff,
         inputform=inputform,
-        mode="right",
+        mode="left",
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="right", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, ae_modelpath=ae_modelpath,
+                                    calc_mean=False, status="test",mode="left", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -90,7 +95,7 @@ def main():
         calc_mean=False,
         status="test",
         inputform=inputform,
-        mode="right",
+        mode="left",
         use_diff=usediff,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right,
@@ -147,7 +152,7 @@ def main():
         if val_acc > best_acc:
             best_acc = val_acc
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model_codebook_size_{str(num_codebook_embeddings)}_3D.pth")
+            torch.save(model.state_dict(), modelsavepath)
             print(f"Saved best model with validation accuracy: {best_acc:.4f}")
         else:
             patience_counter += 1
@@ -163,7 +168,7 @@ def main():
         #     print(f"Saved model at epoch {epoch}")
 
 def get_hrtf_feature(hrtf_files, 
-                 status="train",
+                 status="train", ae_modelpath=None,
                  calc_mean=True, use_diff=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -177,7 +182,7 @@ def get_hrtf_feature(hrtf_files,
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_16_quan_n_3_120.pth", map_location=device,weights_only=True))
+    hrtf_encoder.load_state_dict(torch.load(ae_modelpath, map_location=device,weights_only=True), strict=False)
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []

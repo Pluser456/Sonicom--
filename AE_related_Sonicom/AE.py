@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from vector_quantize_pytorch import SimVQ, VectorQuantize, FSQ,GroupedResidualVQ, ResidualVQ
+from quantizer import VectorQuantizerSinkhorn as VQSinkhorn
 # --- Positional Encoding ---
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
@@ -322,14 +323,16 @@ class HRTF_VQVAE(nn.Module):
         #                                     commitment_weight = commitment_cost, # commitment cost
         #                                     )
         
-        self.vq_layer = VectorQuantize(dim = hrtf_row_width, codebook_size=num_embeddings, 
-                            #   num_quantizers=num_quantizers,
-                                    kmeans_init = True,   # set to True
-                                    kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-                                    # threshold_ema_dead_code=2,
-                                    # use_cosine_sim=True, # 使用余弦相似度
-                                    commitment_weight = commitment_cost, # commitment cost
-                                    )
+        self.vq_layer = VectorQuantize(dim = hrtf_row_width,                      # Encoder 输出维度
+                                codebook_size = num_embeddings,           # 码本大小
+                                kmeans_init = True,             # 启用数据依赖的初始化
+                                kmeans_iters = 10,
+                                affine_param = True,            # 启用缩放控制
+                                learnable_codebook = True,      # 码本是可学习的参数
+                                ema_update = False,              # 禁用EMA，因为我们用优化器
+                                commitment_weight = commitment_cost
+                            )
+        # self.vq_layer = VQSinkhorn(n_e=num_embeddings, e_dim=hrtf_row_width, num_head=1,loss_q_type='l2',beta=commitment_cost)
                                                     
         # self.projector = nn.Linear(self.hrtf_row_width, 1)
 
@@ -359,6 +362,7 @@ class HRTF_VQVAE(nn.Module):
         # zq: (B, target_seq_len_for_vq, d_model), vq_loss, indices 例如 (B, 108, 108)
         # ze = ze.permute(0, 2, 1)
         zq, indices, vq_loss = self.vq_layer(ze)
+        # zq, vq_loss, indices = self.vq_layer(ze) # [1,1,108], [], [1, 1 ,1]
         
         # 将 zq 展平
         # zq_flat = zq.reshape(zq.shape[0], -1) # (B, target_seq_len_for_vq * 1)
@@ -369,3 +373,4 @@ class HRTF_VQVAE(nn.Module):
         reconstructed_hrtf = self.decoder(zq_flat, pos_data)
         
         return reconstructed_hrtf, vq_loss.sum(), indices
+        # return reconstructed_hrtf, torch.zeros(1, device=hrtf_data.device), torch.zeros((1,1), device=hrtf_data.device)
