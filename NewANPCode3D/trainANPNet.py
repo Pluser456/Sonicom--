@@ -14,8 +14,9 @@ import matplotlib.pyplot as plt
 
 def main():
     # 设备配置
-    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = "mode.pth"
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    # weightname = "best_model.pth"
+    weightname = "nopretrain"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
@@ -104,8 +105,8 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.AdamW(model.parameters(), lr=5e-5, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.75)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.85)
     writer = SummaryWriter(log_dir=f"runs/{current_model}/test_{time.strftime('%m-%d_%H-%M')}")
     # 训练循环
     num_epochs = 480*5
@@ -131,8 +132,8 @@ def main():
         if val_loss < best_loss:
             best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
-            # torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-            # print(f"Saved best model with validation loss: {best_loss:.4f}")
+            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
+            print(f"Saved best model with validation loss: {best_loss:.4f}")
             visualize_hrtf(model, test_loader, device, save_path=f"{weightdir}/visualization.png")
         else:
             patience_counter += 1

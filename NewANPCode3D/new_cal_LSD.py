@@ -41,6 +41,7 @@ elif current_model == "2DResNet":
     model = twoDResnet().to(device)
     inputform = "image"
     model_path = f"{weightdir}/{weightname}"
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
 
 
 print("Load model from", model_path)

@@ -371,7 +371,7 @@ class ResNet2D(nn.Module):
         img_feature_dim = 256
         pos_dim = 3
         self.feature_extractor = FeatureExtractor2D()
-        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 108])
+        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 108])
 
     def forward(self, left_voxel, right_voxel, pos, hrtf, device):
         max_chunk_batch_size = 40  # 设置最大批次大小限制
@@ -406,8 +406,8 @@ class ResNet2D(nn.Module):
         num_positions = pos.shape[1]
         voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
         features = torch.cat([voxel_feature_repeated, pos], dim=2)
-        features = features.reshape(-1, features.shape[-1])
-        target = hrtf.reshape(-1, hrtf.shape[-1])
+        # features = features.reshape(-1, features.shape[-1])
+        # target = hrtf.reshape(-1, hrtf.shape[-1])
 
         y_pred = self.fc(features)
-        return y_pred, target
+        return y_pred, hrtf
