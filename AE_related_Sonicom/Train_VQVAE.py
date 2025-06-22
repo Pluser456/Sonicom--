@@ -41,13 +41,13 @@ train_dataset = OnlyHRTFDataSet(
     use_diff=usediff,
     calc_mean=usediff,
     status="test", # 因为这里希望坐标是按顺序输入的
-    mode="right"
+    mode="left"
 )
 test_dataset = OnlyHRTFDataSet(
     dataset_paths["test_hrtf_list"],
     calc_mean=False,
     status="test",
-    mode="right",
+    mode="left",
     use_diff=usediff,
     provided_mean_left=train_dataset.log_mean_hrtf_left,
     provided_mean_right=train_dataset.log_mean_hrtf_right
