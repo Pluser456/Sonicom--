@@ -357,11 +357,11 @@ class ResNet3D(nn.Module):
         num_positions = pos.shape[1]
         voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
         features = torch.cat([voxel_feature_repeated, pos], dim=2)
-        features = features.reshape(-1, features.shape[-1])
-        target = hrtf.reshape(-1, hrtf.shape[-1])
+        # features = features.reshape(-1, features.shape[-1])
+        # target = hrtf.reshape(-1, hrtf.shape[-1])
 
         y_pred = self.fc(features)
-        return y_pred, target
+        return y_pred, hrtf
         
 class ResNet2D(nn.Module):
     """完整网络，集成特征提取和ANP预测"""

@@ -30,6 +30,7 @@ elif current_model == "3DResNet":
     ear_dir = "Ear_voxel"
     isANP = False
     model = threeDResnet().to(device)
+    inputform = "voxel"
     model_path = f"{weightdir}/{weightname}"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
 elif current_model == "2DResNet":
