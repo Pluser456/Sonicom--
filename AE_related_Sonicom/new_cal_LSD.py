@@ -21,18 +21,18 @@ usediff = False  # 是否使用差分数据
 
 current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 if current_model == "3DResNet":
-    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
+    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D_So.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNN3Dweights"
-    ear_dir = "Ear_voxel_Wi"
+    ear_dir = "Ear_voxel"
     isANP = False
     model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
     inputform = "voxel"
 elif current_model == "2DResNet":
-    weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
+    weightname = f"best_model_codebook_size_{num_codebook_embeddings}_So.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNNweights"
-    ear_dir = "Ear_image_gray_Wi"
+    ear_dir = "Ear_image_gray"
     isANP = False
     model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
     inputform = "image"
@@ -54,7 +54,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights_So\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
 print("Load hrtf_encoder")
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
     model.eval()
@@ -100,10 +100,9 @@ res_list = []
 pred_list = []
 true_list = []
 
+hrtf_dir = "FFT_HRTF"
 
-hrtf_dir = "FFT_HRTF_Wi"
-
-dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
 # 获取各个数据集
 right_test = dataset_paths['right_test']
 

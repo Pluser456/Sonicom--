@@ -11,7 +11,7 @@ from AEconfig import pos_dim_for_each_row, \
     num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
     num_codebook_embeddings, commitment_cost_beta, num_quantizers
 
-booksize = 16
+booksize = num_codebook_embeddings
 reconstructed_LSD = 0
 for i in [30,60,90,120]:
     print(f"-----------------cal reconstruct LSD for booksize {booksize}-----------------\n")

@@ -14,7 +14,8 @@ from new_dataset import OnlyHRTFDataSet
 from utils import split_dataset
 from AE import HRTF_VQVAE
 
-weightname = "jlj"
+# weightname = "diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_4_quan_n_3_120.pth"
+weightname = 'nopretrain'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 log_dir = "./runs/HRTF_VQVAE_So" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据
@@ -87,14 +88,20 @@ model = HRTF_VQVAE(
 ).to(device)
 
 if os.path.exists(modelpath):
-    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True),strict=False)
     print("Load model from", modelpath)
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
-optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
+# 创建独立优化器
+model_params = [p for p in model.parameters() if not any(p is vq_p for vq_p in model.vq_layer.parameters())]
+codebook_params = list(model.vq_layer.parameters())
+
+optimizer_codebook = optim.SGD(codebook_params, lr=1e-3) # 码本使用更高的学习率
+
+optimizer_model = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
 num_epochs = 120
-scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=6, num_training_steps=num_epochs)
+scheduler = get_cosine_schedule_with_warmup(optimizer_model, num_warmup_steps=6, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
 writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
 # --- 训练循环 ---
@@ -111,7 +118,8 @@ for epoch in range(num_epochs):
             hrtf = hrtf.unsqueeze(1) # -> (batch, 1, 793, 108)
         pos = batch["position"].to(device)   # (batch, 793, 3)
 
-        optimizer.zero_grad()
+        optimizer_model.zero_grad()
+        optimizer_codebook.zero_grad()
         
         reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
         indices_list.append(indices)
@@ -120,14 +128,15 @@ for epoch in range(num_epochs):
         
         total_loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
-        optimizer.step()
+        optimizer_model.step()
+        optimizer_codebook.step()  # 更新码本参数
         
         epoch_loss_recon += recon_loss.item()
         epoch_loss_vq += vq_loss.item()
         
         train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
                                    f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
-                                   f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
+                                   f"lr: {optimizer_model.param_groups[0]['lr']:.2e} ")
     indicies = torch.cat(indices_list, dim=1)
     activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
 
@@ -135,7 +144,7 @@ for epoch in range(num_epochs):
     avg_vq_loss_train = epoch_loss_vq / len(train_loader)
     writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
     writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
-    writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
+    writer.add_scalar("lr", optimizer_model.param_groups[0]['lr'], epoch)
     writer.add_scalar("activity", activity, epoch)
     print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
 
