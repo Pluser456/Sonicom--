@@ -3,6 +3,7 @@ import torch
 from utils import *
 from TestNet import TestNet as threeDResnetANP
 from TestNet import ResNet3D as threeDResnet
+from TestNet import ResNet2D as twoDResnet
 import matplotlib.pyplot as plt
 import os
 from torch.utils.data import DataLoader
@@ -10,7 +11,7 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 
 # 设备配置
-current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 weightname = "best_model.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -31,6 +32,16 @@ elif current_model == "3DResNet":
     model = threeDResnet().to(device)
     model_path = f"{weightdir}/{weightname}"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+elif current_model == "2DResNet":
+    weightdir = "./CNNweights"
+    ear_dir = "Ear_image_gray"
+    isANP = False
+    model_path = f"{weightdir}/{weightname}"
+    positions_chosen_num = 793
+    model = twoDResnet().to(device)
+    inputform = "image"
+    model_path = f"{weightdir}/{weightname}"
+
 
 print("Load model from", model_path)
 def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
@@ -78,10 +89,10 @@ res_list = []
 pred_list = []
 true_list = []
 
-image_dir = "Ear_voxel"
+
 hrtf_dir = "FFT_HRTF"
 
-dataset_paths = split_dataset(image_dir, hrtf_dir)
+dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
 # 获取各个数据集
 left_test = dataset_paths['left_test']
 
@@ -90,8 +101,11 @@ left_test = dataset_paths['left_test']
 train_dataset = SonicomDataSet(dataset_paths['train_hrtf_list'],
                             dataset_paths['left_train'],
                             dataset_paths['right_train'],
+                            use_diff=use_diff,
+                            calc_mean=True,
+                            inputform=inputform,
                             mode="left")
-train_dataset.turn_auxiliary_mode(True)
+# train_dataset.turn_auxiliary_mode(True)
 auxiliary_loader = DataLoader(
     train_dataset,
     batch_size=len(train_dataset),
@@ -110,6 +124,7 @@ for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
                                         dataset_paths["left_test"],
                                         dataset_paths["right_test"],
                                         mode="left",
+                                        inputform=inputform,
                                         train_log_mean_hrtf_left=log_mean_hrtf_left,
                                         train_log_mean_hrtf_right=log_mean_hrtf_right,
                                         subject_id=hrtfid

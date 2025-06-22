@@ -14,10 +14,10 @@ import matplotlib.pyplot as plt
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    usediff = True  # 是否使用差值HRTF数据
+    usediff = False  # 是否使用差值HRTF数据
 
     if current_model == "3DResNetANP":
         weightdir = "./ANP3Dweights"
@@ -58,14 +58,13 @@ def main():
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
     # 数据分割
-    dataset_paths = split_dataset(ear_dir, "WinFFT_HRTF",inputform=inputform)
+    dataset_paths = split_dataset(ear_dir, "FFT_HRTF",inputform=inputform)
     
     # 创建数据集
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        positions_chosen_num=positions_chosen_num,
         use_diff=usediff,
         calc_mean=True,
         inputform=inputform,
@@ -120,9 +119,9 @@ def main():
         loss = train_one_epoch(model, optimizer, train_loader, device, epoch)
 
         # 验证
-        train_dataset.turn_auxiliary_mode(True)
+        # train_dataset.turn_auxiliary_mode(True)
         val_loss = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
-        train_dataset.turn_auxiliary_mode(False)
+        # train_dataset.turn_auxiliary_mode(False)
         writer.add_scalar("Loss/train", loss, epoch)
         writer.add_scalar("Loss/val", val_loss, epoch)
 

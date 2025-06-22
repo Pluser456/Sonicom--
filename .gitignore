@@ -11,5 +11,11 @@ runs/
 *.png
 *.pyc
 tb_logs/
-WinFFT_HRTF/
 NewVAECode/CVAEweights/
+WinFFT_HRTF/
+vector-quantize-pytorch-master/
+vector_quantize_pytorch/
+FFT_HRTF_Wi/
+Ear_voxel_Wi/
+weights_ws/
+weights/
