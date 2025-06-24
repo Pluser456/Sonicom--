@@ -46,8 +46,8 @@ def split_dataset(voxel_dir: str, hrtf_dir: str, test_indices: list = None, inpu
     right_test = [x for i, x in enumerate(right_voxel_list) if i in test_indices]
     
     # 从体素名称中提取编号
-    train_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in left_train]
-    test_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in left_test]
+    train_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in right_train]
+    test_voxel_numbers = [int(vox.split('_')[0][1:]) for vox in right_test]
     
     # 过滤HRTF文件列表
     train_hrtf_list = [x for x in os.listdir(hrtf_dir) if int(x.split('.')[0][1:]) in train_voxel_numbers]
@@ -117,26 +117,26 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
             loss = loss_function(mu, target_y_sel)
         elif model.modelname == "3DResNet":
-            left_voxel = sample_batch["left_voxel"]
+            # left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
             pos = sample_batch["position"]
             hrtf = sample_batch["hrtf"]
 
-            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+            mu, target_y_sel = model(right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
         elif model.modelname == "2DResNet":
-            left_voxel = sample_batch["left_voxel"]
+            # left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
             pos = sample_batch["position"]
             hrtf = sample_batch["hrtf"]
 
-            mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+            mu, target_y_sel = model(right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
 
         accu_loss += loss.detach()
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
 
         data_loader.desc = "[train epoch {}] loss: {:.3f}".format(epoch, accu_loss.item() / (step + 1))
 
@@ -170,21 +170,21 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
 
                 loss = loss_function(mu, target)
             elif model.modelname == "3DResNet":
-                left_voxel = sample_batch["left_voxel"]
+                # left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
                 pos = sample_batch["position"]
                 hrtf = sample_batch["hrtf"]
 
-                mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+                mu, target_y_sel = model(right_voxel, pos, hrtf, device=device)
                 loss = loss_function(mu, target_y_sel)
 
             elif model.modelname == "2DResNet":
-                left_voxel = sample_batch["left_voxel"]
+                # left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
                 pos = sample_batch["position"]
                 hrtf = sample_batch["hrtf"]
 
-                mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
+                mu, target_y_sel = model(right_voxel, pos, hrtf, device=device)
                 loss = loss_function(mu, target_y_sel)
             accu_loss += loss.detach()
 

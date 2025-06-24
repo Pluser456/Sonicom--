@@ -3,6 +3,7 @@ import torch
 from utils import *
 from TestNet import TestNet as threeDResnetANP
 from TestNet import ResNet3D as threeDResnet
+from TestNet import ResNet2D as twoDResnet
 import matplotlib.pyplot as plt
 import os
 from torch.utils.data import DataLoader
@@ -10,8 +11,8 @@ from new_dataset import SonicomDataSet, SingleSubjectDataSet
 
 
 # 设备配置
-current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-weightname = "best_model.pth"
+current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+weightname = "best_model_Wi.pth"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 batch_size = 32
@@ -26,11 +27,23 @@ if current_model == "3DResNetANP":
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
 elif current_model == "3DResNet":
     weightdir = "./CNN3Dweights"
-    ear_dir = "Ear_voxel"
+    ear_dir = "Ear_voxel_Wi"
     isANP = False
     model = threeDResnet().to(device)
+    inputform = "voxel"
     model_path = f"{weightdir}/{weightname}"
     model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+elif current_model == "2DResNet":
+    weightdir = "./CNNweights"
+    ear_dir = "Ear_image_gray_Wi"
+    isANP = False
+    model_path = f"{weightdir}/{weightname}"
+    positions_chosen_num = 793
+    model = twoDResnet().to(device)
+    inputform = "image"
+    model_path = f"{weightdir}/{weightname}"
+    model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+
 
 print("Load model from", model_path)
 def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
@@ -52,7 +65,7 @@ def evaluate_one_hrtf(model, test_loader, auxiliary_loader=None):
             # 前向传播
                 outputs, _ = model(left_voxel, right_voxel, pos, targets, device=device, is_training=False, auxiliary_data=auxiliary_batch)
             else:
-                outputs, _ = model(left_voxel, right_voxel, pos, targets, device=device)
+                outputs, _ = model(right_voxel, pos, targets, device=device)
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
@@ -78,20 +91,23 @@ res_list = []
 pred_list = []
 true_list = []
 
-image_dir = "Ear_voxel"
-hrtf_dir = "FFT_HRTF"
 
-dataset_paths = split_dataset(image_dir, hrtf_dir)
+hrtf_dir = "FFT_HRTF_Wi"
+
+dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
 # 获取各个数据集
-left_test = dataset_paths['left_test']
+right_test = dataset_paths['right_test']
 
 
 # 实例化训练数据集
 train_dataset = SonicomDataSet(dataset_paths['train_hrtf_list'],
                             dataset_paths['left_train'],
                             dataset_paths['right_train'],
-                            mode="left")
-train_dataset.turn_auxiliary_mode(True)
+                            use_diff=use_diff,
+                            calc_mean=True,
+                            inputform=inputform,
+                            mode="right")
+# train_dataset.turn_auxiliary_mode(True)
 auxiliary_loader = DataLoader(
     train_dataset,
     batch_size=len(train_dataset),
@@ -105,11 +121,12 @@ log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
 log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
 
-for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
+for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
     val_dataset = SingleSubjectDataSet( dataset_paths["test_hrtf_list"],
                                         dataset_paths["left_test"],
                                         dataset_paths["right_test"],
-                                        mode="left",
+                                        mode="right",
+                                        inputform=inputform,
                                         train_log_mean_hrtf_left=log_mean_hrtf_left,
                                         train_log_mean_hrtf_right=log_mean_hrtf_right,
                                         subject_id=hrtfid
@@ -131,7 +148,7 @@ print(f"Mean LSD: {np.mean(res_list)}")
 pred_tensor = torch.cat(pred_list, dim=0)
 true_tensor = torch.cat(true_list, dim=0)
 
-freq_list = np.linspace(0, 107, 108)  # 获取频率列表
+freq_list = np.linspace(0, 89, 90)  # 获取频率列表
 freq_list = 48000 /256 * freq_list  # 计算频率值
 # 存储每个频率点的平均LSD
 avg_lsd_per_freq = np.zeros(len(freq_list))
@@ -143,13 +160,14 @@ for freq_idx in range(len(freq_list)):
 print("\n-----------------contrast with mean HRTF-----------------\n")
 res_list_mean = []
 # 将均值转为tensor
-log_mean_hrtf_left = torch.tensor(np.abs(log_mean_hrtf_left), dtype=torch.float32).to(device)
-log_mean_hrtf_left = log_mean_hrtf_left.unsqueeze(0)  # 添加batch维度
+log_mean_hrtf = log_mean_hrtf_right
+log_mean_hrtf = torch.tensor(np.abs(log_mean_hrtf), dtype=torch.float32).to(device)
+log_mean_hrtf = log_mean_hrtf.unsqueeze(0)  # 添加batch维度
 
-for hrtfid in range(1, len(left_test)+1):  # 选择计算第几个HRTF的LSD
+for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
     # 之前已经计算预测HRTF和真实HRTF之间LSD，
     # 现在计算平均HRTF和真实HRTF之间LSD
-    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_left - true_tensor[hrtfid-1, :, :]) ** 2)).item()
+    lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf - true_tensor[hrtfid-1, :, :]) ** 2)).item()
     res_list_mean.append(lsd_of_mean)
     print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
 
@@ -158,7 +176,7 @@ print(f"Mean LSD of mean HRTF: {np.mean(res_list_mean)}")
 avg_lsd_per_freq_of_mean = np.zeros(len(freq_list))
 for freq_idx in range(len(freq_list)):
     # 计算平均LSD
-    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_left[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
+    LSDvec = torch.sqrt(torch.mean((log_mean_hrtf[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
     avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
     # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 

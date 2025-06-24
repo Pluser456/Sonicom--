@@ -13,10 +13,9 @@ from TestNet import TestNet as create_model
 # from utils import read_split_data, train_one_epoch, evaluate
 from utils import split_dataset, train_one_epoch, evaluate
 
-load_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model_right.pth"
-save_path = f"D:/大学/大三下/大创项目/Sonicom--2d/weights/model_right.pth"
+load_path = f"weights/model_right.pth"
+save_path = f"weights/model_right.pth"
 
-Freq_Num = 90
 def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(device)

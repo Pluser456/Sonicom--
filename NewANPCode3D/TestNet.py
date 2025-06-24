@@ -12,20 +12,16 @@ class FeatureExtractor(nn.Module):
         self.conv_net = resnet3d()
 
         self.imgfc = nn.Sequential(
-            nn.Linear(2000, 256),
+            nn.Linear(1000, 512),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 256),
         )
 
 
-    def forward(self, voxel_left, voxel_right):
-        # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
-        img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
-
-        # 拼接图像特征
-        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
-        return self.imgfc(img_feat)  # [batch, 256]
+    def forward(self, voxel):
+        # 提取单耳特征
+        img_feat = self.conv_net(voxel)  # [batch, 256]
+        return self.imgfc(img_feat)
 
 class FeatureExtractor2D(nn.Module):
     """图像特征提取网络"""
@@ -34,17 +30,14 @@ class FeatureExtractor2D(nn.Module):
         self.conv_net = resnet2d()
 
         self.imgfc = nn.Sequential(
-            nn.Linear(2000, 256),
+            nn.Linear(1000, 512),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 256),
         )
-    def forward(self, voxel_left, voxel_right):
-        # 分别提取左、右耳特征
-        img_feat_left = self.conv_net(voxel_left)  # [batch, 256]
-        img_feat_right = self.conv_net(voxel_right)  # [batch, 256]
-
+    def forward(self, voxel):
+        # 提取单耳特征
+        img_feat = self.conv_net(voxel)  # [batch, 512]
         # 拼接图像特征
-        img_feat = torch.cat([img_feat_left, img_feat_right], dim=1)  # [batch, 512]
         return self.imgfc(img_feat)  # [batch, 256]
 
 
@@ -322,34 +315,15 @@ class ResNet3D(nn.Module):
         img_feature_dim = 256
         pos_dim = 3
         self.feature_extractor = FeatureExtractor()
-        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256,108])
+        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 90])
 
-    def forward(self, left_voxel, right_voxel, pos, hrtf, device):
-        max_chunk_batch_size = 40  # 设置最大批次大小限制
-        if left_voxel.shape[0] > max_chunk_batch_size:
-            voxel_feature_chunks = []
-            # 将左右体素数据按max_chunk_batch_size分割成小批次
-            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
-            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
+    def forward(self, voxel, pos, hrtf, device):
+        voxel = voxel.to(device)
+        # 如果批次大小未超过限制，则直接提取特征
+        voxel_feature = self.feature_extractor(voxel)
 
-            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
-                # 对每个小批次提取特征
-                lv_chunk = lv_chunk.to(device)
-                rv_chunk = rv_chunk.to(device)
-                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
-                voxel_feature_chunks.append(vf_chunk)
-            
-            # 合并所有小批次的特征提取结果
-            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
-        else:
-            left_voxel = left_voxel.to(device)
-            right_voxel = right_voxel.to(device)
-            # 如果批次大小未超过限制，则直接提取特征
-            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
-
-        
         # 释放不再需要的变量
-        del left_voxel, right_voxel
+        del voxel
         torch.cuda.empty_cache()  # 清理未使用的缓存
         pos = pos.to(device)
         hrtf = hrtf.to(device)
@@ -357,11 +331,11 @@ class ResNet3D(nn.Module):
         num_positions = pos.shape[1]
         voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
         features = torch.cat([voxel_feature_repeated, pos], dim=2)
-        features = features.reshape(-1, features.shape[-1])
-        target = hrtf.reshape(-1, hrtf.shape[-1])
+        # features = features.reshape(-1, features.shape[-1])
+        # target = hrtf.reshape(-1, hrtf.shape[-1])
 
         y_pred = self.fc(features)
-        return y_pred, target
+        return y_pred, hrtf
         
 class ResNet2D(nn.Module):
     """完整网络，集成特征提取和ANP预测"""
@@ -371,34 +345,15 @@ class ResNet2D(nn.Module):
         img_feature_dim = 256
         pos_dim = 3
         self.feature_extractor = FeatureExtractor2D()
-        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 512, 256, 108])
+        self.fc = batch_mlp(img_feature_dim + pos_dim, [512, 256, 256, 90])
 
-    def forward(self, left_voxel, right_voxel, pos, hrtf, device):
-        max_chunk_batch_size = 40  # 设置最大批次大小限制
-        if left_voxel.shape[0] > max_chunk_batch_size:
-            voxel_feature_chunks = []
-            # 将左右体素数据按max_chunk_batch_size分割成小批次
-            left_voxel_chunks = torch.split(left_voxel, max_chunk_batch_size, dim=0)
-            right_voxel_chunks = torch.split(right_voxel, max_chunk_batch_size, dim=0)
+    def forward(self, voxel, pos, hrtf, device):
+        voxel = voxel.to(device)
+        # 如果批次大小未超过限制，则直接提取特征
+        voxel_feature = self.feature_extractor(voxel)
 
-            for lv_chunk, rv_chunk in zip(left_voxel_chunks, right_voxel_chunks):
-                # 对每个小批次提取特征
-                lv_chunk = lv_chunk.to(device)
-                rv_chunk = rv_chunk.to(device)
-                vf_chunk = self.feature_extractor(lv_chunk, rv_chunk)
-                voxel_feature_chunks.append(vf_chunk)
-            
-            # 合并所有小批次的特征提取结果
-            voxel_feature = torch.cat(voxel_feature_chunks, dim=0)
-        else:
-            left_voxel = left_voxel.to(device)
-            right_voxel = right_voxel.to(device)
-            # 如果批次大小未超过限制，则直接提取特征
-            voxel_feature = self.feature_extractor(left_voxel, right_voxel)
-
-        
         # 释放不再需要的变量
-        del left_voxel, right_voxel
+        del voxel
         torch.cuda.empty_cache()  # 清理未使用的缓存
         pos = pos.to(device)
         hrtf = hrtf.to(device)
@@ -406,8 +361,8 @@ class ResNet2D(nn.Module):
         num_positions = pos.shape[1]
         voxel_feature_repeated = voxel_feature.unsqueeze(1).repeat(1, num_positions, 1)
         features = torch.cat([voxel_feature_repeated, pos], dim=2)
-        features = features.reshape(-1, features.shape[-1])
-        target = hrtf.reshape(-1, hrtf.shape[-1])
+        # features = features.reshape(-1, features.shape[-1])
+        # target = hrtf.reshape(-1, hrtf.shape[-1])
 
         y_pred = self.fc(features)
-        return y_pred, target
+        return y_pred, hrtf

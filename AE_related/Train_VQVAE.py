@@ -38,7 +38,7 @@ right_test = dataset_paths['right_test']
 train_dataset = OnlyHRTFDataSet(
     dataset_paths["train_hrtf_list"],
     use_diff=usediff,
-    calc_mean=usediff,
+    calc_mean=True,
     status="test", # 因为这里希望坐标是按顺序输入的
     mode="right"
 )
