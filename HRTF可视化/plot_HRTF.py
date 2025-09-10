@@ -2,10 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # 从文件导入数据
-freq_list = np.loadtxt('HRTF可视化\\freq_data.txt')
-avg_lsd_per_freq = np.loadtxt('HRTF可视化\hrtf_base_0_0.txt')
-avg_lsd_per_freq1 = np.loadtxt('HRTF可视化\hrtf_AE_0_0.txt')
-avg_lsd_per_freq_of_mean = np.loadtxt('HRTF可视化\hrtf_true_0_0.txt')
+freq_list = np.loadtxt('HRTF可视化\\freq_data_Wi.txt')
+avg_lsd_per_freq = np.loadtxt('HRTF可视化\hrtf_base_0_0_Wi.txt')
+avg_lsd_per_freq1 = np.loadtxt('HRTF可视化\hrtf_AE_0_0_2D_Wi.txt')
+avg_lsd_per_freq2 = np.loadtxt('HRTF可视化\hrtf_AE_0_0_3D_Wi.txt')
+avg_lsd_per_freq_of_true = np.loadtxt('HRTF可视化\hrtf_true_0_0_Wi.txt')
 #-------------------------
 # 字体与字号全局设置（只需修改这里即可统一调整）
 #-------------------------
@@ -38,7 +39,7 @@ plt.plot(freq_list, avg_lsd_per_freq1,
                 markeredgewidth=0.5,
                 label = "VQVAE")      # 标记描边粗细
 
-plt.plot(freq_list, avg_lsd_per_freq_of_mean, 
+plt.plot(freq_list, avg_lsd_per_freq_of_true, 
                 'y-o',                    # 红色实线+圆形标记
                 linewidth=1.2, 
                 markersize=5,

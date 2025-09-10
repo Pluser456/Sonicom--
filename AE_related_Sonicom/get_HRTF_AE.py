@@ -13,13 +13,14 @@ from AE import HRTF_VQVAE
 from AEconfig import pos_dim_for_each_row, \
     num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
     num_codebook_embeddings, commitment_cost_beta, num_quantizers
+from new_cal_LSD import evaluate_one_hrtf
 
 print(f"当前码本大小为：{num_codebook_embeddings}")
 # 设备配置
 batch_size = 32
 usediff = False  # 是否使用差分数据
 
-current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 if current_model == "3DResNet":
     weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,56 +55,17 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
+hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights_So\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True),strict=False)
 print("Load hrtf_encoder")
-def evaluate_one_hrtf(model, hrtf_encoder, test_loader):
-    model.eval()
-    hrtf_encoder.eval()
-
-    all_preds = []
-    all_targets = []
-    with torch.no_grad():
-        for batch in test_loader:
-            # 数据迁移到设备
-            targets = batch["hrtf"]
-            meanloghrtf = batch["meanlog"].to(device)  # [batch]
-            pos = batch["position"].to(device)
-            right_picture = batch["right_voxel"].to(device)
-            pred, _ = model(right_picture, device=device) # [batch_size, 18]
-            # pred = pred.reshape(-1, 3, 3)
-            # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
-            # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
-            zq = hrtf_encoder.vq_layer.get_output_from_indices(pred)
-            outputs = hrtf_encoder.decoder(zq, pos).squeeze(1)  # [batch_size, 90]
-            # 添加epsilon防止log(0)
-            targets = targets + 1e-8
-
-            # 转换到对数域 (dB)
-            log_target = 20 * torch.log10(targets)
-            if usediff:
-                pred = torch.abs(outputs + meanloghrtf)
-            else:
-                pred = torch.abs(outputs)
-            log_target = torch.abs(log_target)
-
-            # 将当前batch的结果添加到列表
-            all_preds.append(pred)
-            all_targets.append(log_target)
-
-    # 将所有batch的结果拼接成两个大矩阵
-    final_preds = torch.cat(all_preds, dim=0)  # [total_samples, n_frequencies]
-    final_targets = torch.cat(all_targets, dim=0).to(device)  # [total_samples, n_frequencies]
-
-    return final_preds, final_targets
 
 res_list = []
 pred_list = []
 true_list = []
 
 
-hrtf_dir = "FFT_HRTF_Wi"
+hrtf_dir = "FFT_HRTF"
 
-dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=inputform)
 # 获取各个数据集
 right_test = dataset_paths['right_test']
 
@@ -151,15 +113,11 @@ pred_log_hrtf = pred_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 true_log_hrtf = true_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 
 
-idx_0_0 = 1956
-idx_0_90 = 11
-idx_0_80 = 414
-np.savetxt('hrtf_AE_0_0.txt', pred_log_hrtf[idx_0_0,:], fmt='%.1f', header='Frequency (Hz)')
-np.savetxt('hrtf_true_0_0.txt', true_log_hrtf[idx_0_0,:], fmt='%.1f', header='Frequency (Hz)')
-
-
-
-
-
-
+idx_0_0 = 1957
+idx_0_90 = 12
+idx_0_80 = 415
+path = f'HRTF可视化'
+input_type = '2D' if current_model in ['2DResNet', '2DResNetANP'] else '3D'
+np.savetxt(f'{path}\\hrtf_AE_0_0_{input_type}_So.txt', pred_log_hrtf[idx_0_0-1,:], fmt='%.3f', header='Magnitude (dB)')
+np.savetxt(f'{path}\\hrtf_true_0_0_{input_type}_So.txt', true_log_hrtf[idx_0_0-1,:], fmt='%.3f', header='Magnitude (dB)')
 

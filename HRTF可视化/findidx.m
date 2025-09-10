@@ -1,9 +1,9 @@
-data = load('P00005.mat');  % 加载文件
+data = load('./FFT_HRTF_Wi/P00005.mat');  % 加载文件
 theta = data.theta;          % 提取 theta 变量（2562x2 double）
 
-% 步骤2：定义目标值（例如：第一列=0，第二列=30）
-target_col1 = 180;    % 第一列目标值
-target_col2 = -30;   % 第二列目标值
+% 步骤2：定义目标值（第一列是方位角phi，第二列是仰角theta）
+target_col1 = 20;    % 第一列目标值
+target_col2 = 54;   % 第二列目标值
 
 % 步骤3：查找满足条件的行索引（精确匹配）
 % 方法1：直接逻辑索引（适用于整数或精确浮点数）

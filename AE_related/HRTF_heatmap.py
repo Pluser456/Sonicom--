@@ -17,13 +17,13 @@ from new_cal_LSD import evaluate_one_hrtf
 
 print(f"当前码本大小为：{num_codebook_embeddings}")
 # 设备配置
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 batch_size = 32
 usediff = False  # 是否使用差分数据
 
-current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
 if current_model == "3DResNet":
     weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNN3Dweights"
     ear_dir = "Ear_voxel_Wi"
     isANP = False
@@ -31,6 +31,7 @@ if current_model == "3DResNet":
     inputform = "voxel"
 elif current_model == "2DResNet":
     weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weightdir = "./CNNweights"
     ear_dir = "Ear_image_gray_Wi"
     isANP = False
@@ -54,7 +55,7 @@ hrtf_encoder = HRTF_VQVAE(
     pos_dim_per_row=pos_dim_for_each_row,
     num_quantizers=num_quantizers
 ).to(device)
-hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True),strict=False)
+hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
 print("Load hrtf_encoder")
 
 res_list = []
@@ -64,7 +65,7 @@ true_list = []
 
 hrtf_dir = "FFT_HRTF_Wi"
 
-dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=inputform)
+dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
 # 获取各个数据集
 right_test = dataset_paths['right_test']
 
@@ -103,7 +104,7 @@ dataloader = DataLoader(val_dataset,
                         pin_memory=True,
                         collate_fn=val_dataset.collate_fn
                          )
-pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, hrtf_encoder, dataloader, usediff=usediff)
+pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(model, hrtf_encoder, dataloader)
 pred_log_hrtf = pred_log_hrtf.squeeze(0)
 true_log_hrtf = true_log_hrtf.squeeze(0)
 
@@ -111,10 +112,55 @@ true_log_hrtf = true_log_hrtf.squeeze(0)
 pred_log_hrtf = pred_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 true_log_hrtf = true_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 
-idx_dict = {"0_0": 1957, "0_90": 12, "90_0": 305, "20_54": 501}
-path = f'HRTF可视化'
-input_type = '2D' if current_model in ['2DResNet', '2DResNetANP'] else '3D'
-for idx_key, idx in idx_dict.items():
-    np.savetxt(f'{path}\\hrtf_AE_{idx_key}_{input_type}_Wi.txt', pred_log_hrtf[idx-1,:], fmt='%.3f', header='Magnitude (dB)')
-    np.savetxt(f'{path}\\hrtf_true_{idx_key}_Wi.txt', true_log_hrtf[idx-1,:], fmt='%.3f', header='Magnitude (dB)')
+# 1. 读取P00013_results.txt文件
+data = np.loadtxt('P00013_results.txt', skiprows=1)  # 跳过表头行
+indices = data[:, 0].astype(int) - 1  # 索引修正
+angles = data[:, 1]                   # 角度(度)
+
+# 2. 加载频率列表
+freq_list = np.loadtxt(os.path.join('HRTF可视化', 'freq_data.txt'))
+freq_list_kHz = freq_list / 1000  # 转换为kHz单位
+
+# 筛选有效角度
+valid_mask = (angles >= -180) & (angles <= 180)
+valid_angles = angles[valid_mask]
+valid_indices = indices[valid_mask]
+
+# 按角度降序排序（最大角度排在最上面）
+sort_order = np.argsort(valid_angles)[::-1]  # 获取降序索引
+sorted_angles = valid_angles[sort_order]      # 应用排序
+sorted_indices = valid_indices[sort_order]    # 保持对应的索引
+
+# 创建热图矩阵（使用排序后的数据）
+hrtf_matrix = true_log_hrtf[sorted_indices]    # 形状为 (n_angles, n_frequencies)
+
+# 创建热图（注意Y轴范围使用排序后的角度值）
+im = plt.imshow(hrtf_matrix,
+                extent=[freq_list_kHz.min(), freq_list_kHz.max(), 
+                        sorted_angles.min(), sorted_angles.max()],
+                aspect='auto', 
+                origin='lower',  # 原点在左下角
+                cmap='viridis')
+
+# 设置坐标轴标签
+plt.xlabel('Frequency (kHz)', fontsize=14)
+plt.ylabel('Angle θ (degrees)', fontsize=14)
+
+# 添加颜色条
+cbar = plt.colorbar(im)
+cbar.set_label('dB', fontsize=14)
+
+# 设置坐标轴范围
+plt.xlim(freq_list_kHz.min(), freq_list_kHz.max())
+plt.ylim(valid_angles.min(), valid_angles.max())
+
+# 添加标题
+plt.title('HRTF Magnitude (dB) vs Frequency and Angle', fontsize=16)
+
+plt.tight_layout()
+plt.show()
+
+
+
+
 
