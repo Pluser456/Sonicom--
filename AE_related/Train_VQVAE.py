@@ -14,7 +14,7 @@ from new_dataset import OnlyHRTFDataSet
 from utils import split_dataset
 from AE import HRTF_VQVAE
 
-weightname = "jlj"
+weightname = "nopretrain"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 log_dir = "./runs/HRTF_VQVAE" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据

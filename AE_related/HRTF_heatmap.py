@@ -65,7 +65,7 @@ true_list = []
 
 hrtf_dir = "FFT_HRTF_Wi"
 
-dataset_paths = split_dataset(ear_dir, hrtf_dir,inputform=inputform)
+dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 # 获取各个数据集
 right_test = dataset_paths['right_test']
 
@@ -88,7 +88,7 @@ log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
 log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
 # 只取第一个测试集
-hrtfid = 1
+hrtfid = 6
 val_dataset = SingleSubjectDataSet( dataset_paths["test_hrtf_list"],
                                     dataset_paths["left_test"],
                                     dataset_paths["right_test"],
@@ -112,6 +112,11 @@ true_log_hrtf = true_log_hrtf.squeeze(0)
 pred_log_hrtf = pred_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 true_log_hrtf = true_log_hrtf.cpu().numpy()  # 转换为 NumPy 数组
 
+# 设置全局字体为Times New Roman
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
+plt.rcParams.update({'font.size': 12})  # 全局基础字号
+
 # 1. 读取P00013_results.txt文件
 data = np.loadtxt('P00013_results.txt', skiprows=1)  # 跳过表头行
 indices = data[:, 0].astype(int) - 1  # 索引修正
@@ -122,17 +127,17 @@ freq_list = np.loadtxt(os.path.join('HRTF可视化', 'freq_data.txt'))
 freq_list_kHz = freq_list / 1000  # 转换为kHz单位
 
 # 筛选有效角度
-valid_mask = (angles >= -180) & (angles <= 180)
+valid_mask = (angles >= -50) & (angles <= 180)
 valid_angles = angles[valid_mask]
 valid_indices = indices[valid_mask]
 
 # 按角度降序排序（最大角度排在最上面）
-sort_order = np.argsort(valid_angles)[::-1]  # 获取降序索引
+sort_order = np.argsort(valid_angles)[::1]  # 获取降序索引
 sorted_angles = valid_angles[sort_order]      # 应用排序
 sorted_indices = valid_indices[sort_order]    # 保持对应的索引
 
 # 创建热图矩阵（使用排序后的数据）
-hrtf_matrix = true_log_hrtf[sorted_indices]    # 形状为 (n_angles, n_frequencies)
+hrtf_matrix = pred_log_hrtf[sorted_indices]    # 形状为 (n_angles, n_frequencies)
 
 # 创建热图（注意Y轴范围使用排序后的角度值）
 im = plt.imshow(hrtf_matrix,
@@ -142,25 +147,31 @@ im = plt.imshow(hrtf_matrix,
                 origin='lower',  # 原点在左下角
                 cmap='viridis')
 
-# 设置坐标轴标签
-plt.xlabel('Frequency (kHz)', fontsize=14)
-plt.ylabel('Angle θ (degrees)', fontsize=14)
+# 设置坐标轴标签（单独设置字号）
+plt.xlabel('Frequency (kHz)', fontsize=18, fontfamily='Times New Roman')
+plt.ylabel('Angle φ (degrees)', fontsize=18, fontfamily='Times New Roman')
 
-# 添加颜色条
+# 添加颜色条并设置标签
 cbar = plt.colorbar(im)
-cbar.set_label('dB', fontsize=14)
+cbar.set_label('dB', fontsize=16, fontfamily='Times New Roman')
+# 设置颜色条刻度的字号
+cbar.ax.tick_params(labelsize=16)
 
 # 设置坐标轴范围
 plt.xlim(freq_list_kHz.min(), freq_list_kHz.max())
 plt.ylim(valid_angles.min(), valid_angles.max())
 
-# 添加标题
-plt.title('HRTF Magnitude (dB) vs Frequency and Angle', fontsize=16)
+# 设置刻度标签字号
+plt.xticks(fontsize=16, fontfamily='Times New Roman')
+plt.yticks(fontsize=16, fontfamily='Times New Roman')
+
+# # 添加标题
+# plt.title('HRTF Magnitude (dB) vs Frequency and Angle', 
+#           fontsize=16, fontfamily='Times New Roman')
 
 plt.tight_layout()
+
+# 关键修改：先保存再显示！！！
+plt.savefig("HRTF_contrast_pred.pdf", bbox_inches='tight', dpi=300)
 plt.show()
-
-
-
-
 

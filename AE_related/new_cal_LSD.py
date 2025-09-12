@@ -61,7 +61,7 @@ if __name__ == "__main__":
     batch_size = 32
     usediff = False  # 是否使用差分数据
 
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     if current_model == "3DResNet":
         weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
         weightdir = "./CNN3Dweights"
@@ -191,8 +191,11 @@ if __name__ == "__main__":
     np.savetxt(f'{path}\\freq_data_Wi.txt', freq_list, fmt='%.1f', header='Frequency (Hz)')
 
     # 保存LSD数据
-    np.savetxt(f'{path}\\lsd_data_Wi.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
-    np.savetxt(f'{path}\\lsd_mean_data_Wi.txt', avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD (dB)')
+    # np.savetxt(f'{path}\\lsd_data_Wi.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
+    # np.savetxt(f'{path}\\lsd_mean_data_Wi.txt', avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD (dB)')
+    path = f'HRTF可视化'
+    input_type = '2D' if current_model in ['2DResNet', '2DResNetANP'] else '3D'
+    np.savetxt(f'{path}\\lsd_AE_{input_type}_Wi.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
 
     # # 绘制频率-LSD图
     # plt.figure(figsize=(10, 6))

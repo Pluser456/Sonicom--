@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     # weightname = "best_model_Wi.pth"
     weightname = "nopretrain"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -105,14 +105,14 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
+    optimizer = optim.Adam(model.parameters(), lr=2e-4, weight_decay=1e-5)
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.9)
     writer = SummaryWriter(log_dir=f"runs/{current_model}/test_{time.strftime('%m-%d_%H-%M')}")
     # 训练循环
     num_epochs = 480*5
     best_loss = 300
     
-    patience = 30  # 早停的容忍次数
+    patience = 15  # 早停的容忍次数
     patience_counter = 0
 
     for epoch in range(0, num_epochs + 1):

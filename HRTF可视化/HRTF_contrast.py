@@ -35,6 +35,7 @@ for ax, theta in zip(axes, thetas_to_plot):
         HRTF_VQVAE_3D = np.loadtxt(f'{path}\\hrtf_AE_{theta}_3D_Wi.txt')
         HRTF_ResNet = np.loadtxt(f'{path}\\hrtf_base_{theta}.txt')  
         HRTF_TRUE = np.loadtxt(f'{path}\\hrtf_true_{theta}_2D_Wi.txt')
+        HRTF_ResNet_3D = np.loadtxt(f'{path}\\hrtf_CNN_{theta}_3D_Wi.txt')
     except FileNotFoundError as e:
         print(f"警告: 找不到文件 {e.filename}。该子图将为空。")
         continue
@@ -62,6 +63,10 @@ for ax, theta in zip(axes, thetas_to_plot):
     ax.plot(freq_list, HRTF_ResNet, 'g--', linewidth=linewidth, 
             markersize=markersize, markerfacecolor='none', markeredgecolor='green', 
             markeredgewidth=1.5, label="ResNet")
+    
+    ax.plot(freq_list, HRTF_ResNet_3D, 'm--', linewidth=linewidth,
+        markersize=markersize, markerfacecolor='none', markeredgecolor='m', 
+        markeredgewidth=1.5, label="ResNet 3D")
 
     # --- 单个子图的设置 ---
     
