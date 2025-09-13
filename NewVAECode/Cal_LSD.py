@@ -22,6 +22,11 @@ import numpy as np
 def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
     #LSD = 3.62264050
     #LSD = 3.8496014293173686
+    pred_single_hrtf_mat =[]
+    pred_hrtf_tensor = []
+    single_hrtf_mat =[]
+    hrtf_tensor = []
+    lsd_list = []
     total_loss = 0.0
     mse_loss = nn.MSELoss()
     with torch.no_grad():  # 不需要计算梯度
@@ -38,14 +43,24 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
             z_ears_c = torch.cat((z_ears, c), dim=-1)
             z_hrtf = dnn_model.forward(z_ears_c)
             hrtf_reconstructed = cvae_model.cvae.dec(z_hrtf,c)
+            pred_single_hrtf_mat.append(hrtf_reconstructed)
+            single_hrtf_mat.append(hrtf)
+            if (i+1) % 2562 == 0:
+                single_hrtf_mat = torch.cat(single_hrtf_mat, dim=0)
+                pred_single_hrtf_mat = torch.cat(pred_single_hrtf_mat, dim=0)
+                hrtf_tensor.append(single_hrtf_mat)
+                pred_hrtf_tensor.append(pred_single_hrtf_mat)
+                single_lsd = torch.sqrt(mse_loss(torch.abs(single_hrtf_mat), torch.abs(pred_single_hrtf_mat)))
+                lsd_list.append(single_lsd.item())
+                print(f"\nSubject {(i+1)//2562}: LSD = {single_lsd.item():.6f}")
+                pred_single_hrtf_mat =[]
+                single_hrtf_mat =[]
+            # loss = mse_loss(torch.abs(hrtf), torch.abs(hrtf_reconstructed))
+            # if loss.is_cuda:
+            #     loss = loss.cpu()
 
-            loss = mse_loss(hrtf, hrtf_reconstructed)
-            if loss.is_cuda:
-                loss = loss.cpu()
-            lsd_loss = np.sqrt(loss.numpy())
-
-            total_loss += lsd_loss.item()  # 累加损失
-            print(f"Batch {i + 1}: Loss = {lsd_loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
+            # total_loss += loss.item()  # 累加损失
+            # print(f"Batch {i + 1}: Loss = {lsd_loss.item():.4f}, Total Loss = {total_loss / (i + 1):.4f}")
 
             '''
             # 打印原始hrtf曲线
@@ -66,9 +81,15 @@ def calculate_lsd(dataloader, cvae_model, vae_model, dnn_model, device):
             '''
 
     # 计算平均损失
-    average_loss = total_loss / len(dataloader)
-    print(f"Average MSE Loss: {average_loss}")
-    return average_loss
+    # average_loss = total_loss / len(dataloader)
+    # print(f"Average MSE Loss: {average_loss}")
+    average_lsd = sum(lsd_list) / len(lsd_list)
+    # 计算逐频率点的LSD
+    hrtf_tensor = torch.stack(hrtf_tensor, dim=0)
+    pred_hrtf_tensor = torch.stack(pred_hrtf_tensor, dim=0)
+    LSDvec = torch.sqrt(torch.mean((pred_hrtf_tensor - hrtf_tensor)**2, dim=1))  # 计算每个频率点的LSD
+    avg_lsd_per_freq = torch.mean(LSDvec, dim=0).tolist()  # 计算所有样本在每个频率点的平均LSD
+    return average_lsd, avg_lsd_per_freq
 
 def calculate_txt(dataloader, cvae_model, vae_model, dnn_model, device):
     idx_0_0 = 1956
@@ -226,10 +247,13 @@ def main():
         collate_fn=test_dataset.collate_fn
     )
 
-    #LSD = calculate_lsd(test_loader, cvae_model, vae_model, dnn_model, device)
-    #print("LSD", LSD)
+    LSD, avg_lsd_per_freq = calculate_lsd(test_loader, cvae_model, vae_model, dnn_model, device)
+    print("LSD", LSD)
+    path = f'HRTF可视化'
+    input_type = '2D'
+    np.savetxt(f'{path}\\lsd_VAE_{input_type}_Wi.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
 
-    calculate_txt(test_loader, cvae_model, vae_model, dnn_model, device)
+    # calculate_txt(test_loader, cvae_model, vae_model, dnn_model, device)
 
 if __name__ == '__main__':
     main()

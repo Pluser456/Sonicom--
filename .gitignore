@@ -21,3 +21,6 @@ FFT_HRTF_Wi/
 Ear_voxel_Wi/
 weights/
 .txt
+HRTF可视化/*.txt
+HRTF可视化/*.png
+HRTF可视化/*.pdf
