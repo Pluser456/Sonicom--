@@ -21,7 +21,7 @@ freq_list = freq_list / 1000  # 转换为kHz单位
 
 # 注意：确保以下文件都存在
 try:
-    # HRTF_VAE = np.loadtxt(f'{path}\\lsd_VAE_2D_Wi.txt')
+    HRTF_VAE = np.loadtxt(f'{path}\\lsd_VAE_2D_Wi.txt')
     HRTF_VQVAE = np.loadtxt(f'{path}\\lsd_AE_2D_Wi.txt')
     HRTF_VQVAE_3D = np.loadtxt(f'{path}\\lsd_AE_3D_Wi.txt')
     HRTF_ResNet = np.loadtxt(f'{path}\\lsd_CNN_2D_Wi.txt')  
@@ -46,9 +46,9 @@ plt.plot(freq_list, HRTF_VQVAE_3D, '-', color="#C02222", linewidth=linewidth,
         markeredgewidth=1.1, label="Proposed 3D")
 
 # 绘制Hybrid曲线
-# plt.plot(freq_list, HRTF_VAE, '--', color='#0072BD', linewidth=linewidth, 
-#         markersize=markersize, markerfacecolor='none', markeredgecolor='#0072BD', 
-#         markeredgewidth=1.5, label="Hybrid")
+plt.plot(freq_list, HRTF_VAE, '--', color='#0072BD', linewidth=linewidth, 
+        markersize=markersize, markerfacecolor='none', markeredgecolor='#0072BD', 
+        markeredgewidth=1.5, label="Hybrid")
 
 # 绘制ResNet曲线
 plt.plot(freq_list, HRTF_ResNet, 'g--', linewidth=linewidth, 
@@ -74,7 +74,7 @@ plt.legend(fontsize=legend_fontsize, loc='best', frameon=True,
 plt.xlabel('Frequency (kHz)', fontsize=label_fontsize, labelpad=15)
 plt.ylabel('LSD (dB)', fontsize=label_fontsize, labelpad=15)
 plt.xlim(0,18)
-plt.ylim(0,5)
+plt.ylim(0,6)
 plt.xticks([0, 5, 10, 15])
 # 保存和显示图像
 # 注意：保存的文件名不再包含单个theta
