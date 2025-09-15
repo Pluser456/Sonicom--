@@ -1,5 +1,6 @@
 Ear_image_gray/
 FFT_HRTF/
+Ear_voxel/
 .vscode/
 *.pth
 *.zip
@@ -9,4 +10,22 @@ runs/
 .idea/
 *.png
 *.pyc
+*.yaml
+*.ckpt
+tb_logs/
+NewVAECode/CVAEweights/
+WinFFT_HRTF/
+vector-quantize-pytorch-master/
+vector_quantize_pytorch/
+FFT_HRTF_Wi/
+Ear_voxel_Wi/
+weights_ws/
+weights_ws2/
+weights/
+
+# 忽略 HRTF可视化 目录下的数据文件和生成的图片
+HRTF可视化/*.txt
+HRTF可视化/*.pdf
+HRTF可视化/*.png
+
 LSD_results.txt

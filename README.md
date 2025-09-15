@@ -76,3 +76,26 @@ VAE：输入层103（HRTF点数）->128 ->128->64 ->64->32-> 16个均值 + 16个
 相关的论文我们还需要看。重建的论文如下：https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=8962233
 
 文章提到的卷积VAE提取耳朵特征论文如下：https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9090538
+
+### 2025.6.15
+
+WiDESPREaD数据集的HRTF预测结果：
+
+|codebook size|VQ LSD(dB)|2D CNN+VQ LSD(dB)|3D CNN+VQ LSD(dB)|
+|:---:|:---:|:---:|:---:|
+|4|3.299|3.299|3.330|
+|6|3.386|3.466|3.465|
+|8|3.316|3.433|3.512|
+|16|3.228|3.325|3.241|
+
+### 2025.6.29
+
+Sonicom数据集的HRTF预测结果：
+
+|codebook size|VQ LSD(dB)|2D CNN+VQ LSD(dB)|3D CNN+VQ LSD(dB)|
+|:---:|:---:|:---:|:---:|
+|4|3.299|3.299|3.330|
+|6|3.386|3.466|3.465|
+|8|3.316|3.433|3.512|
+|16|3.228|3.325|3.241|
+
