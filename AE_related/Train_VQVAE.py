@@ -16,17 +16,19 @@ from AE import HRTF_VQVAE
 
 weightname = "nopretrain"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-log_dir = "./runs/HRTF_VQVAE" # <--- TensorBoard 日志目录
+log_dir = "AE_related/HRTF_VQVAE" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据
+batch_size = 4
 
-weightdir = "./HRTFAEweights"
+weightdir = log_dir
 ear_dir = "Ear_image_gray_Wi"
+hrtf_dir = "FFT_HRTF_Wi"
 if os.path.exists(weightdir) is False:
     os.makedirs(weightdir)
 modelpath = f"{weightdir}/{weightname}"
 inputform = "image"
 
-dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=inputform)
 train_hrtf_list = dataset_paths['train_hrtf_list']
 test_hrtf_list = dataset_paths['test_hrtf_list']
 left_train = dataset_paths['left_train']
@@ -38,7 +40,7 @@ right_test = dataset_paths['right_test']
 train_dataset = OnlyHRTFDataSet(
     dataset_paths["train_hrtf_list"],
     use_diff=usediff,
-    calc_mean=True,
+    calc_mean=usediff,
     status="test", # 因为这里希望坐标是按顺序输入的
     mode="right"
 )
@@ -55,7 +57,7 @@ test_dataset = OnlyHRTFDataSet(
 # 创建数据加载器
 train_loader = DataLoader(
     train_dataset,
-    batch_size=1,
+    batch_size=batch_size,
     shuffle=True,
     collate_fn=train_dataset.collate_fn
 )
@@ -63,27 +65,28 @@ train_loader = DataLoader(
 
 test_loader = DataLoader(
     test_dataset,
-    batch_size=1,
+    batch_size=batch_size,
     shuffle=False,
     collate_fn=test_dataset.collate_fn
 )
 
 
 # --- 模型实例化和优化器 ---
-
-
-from AEconfig import transformer_encoder_settings, encoder_out_vec_num, \
-    pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, num_codebook_embeddings, commitment_cost_beta,num_quantizers
+from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
+    hrtf_row_len, num_codebook_embeddings, commitment_cost_beta, embed_dim, use_VQ, input_pos_as_seq, \
+        tolerance_for_calc_threshold, decay
 
 model = HRTF_VQVAE(
-    hrtf_row_width=width_per_hrtf_row,
-    hrtf_num_rows=num_hrtf_rows,
+    hrtf_row_len=hrtf_row_len,
     encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
+    embed_dim=embed_dim,
     encoder_transformer_config=transformer_encoder_settings,
+    decoder_transformer_config=transformer_decoder_settings,
     num_embeddings=num_codebook_embeddings,
-    commitment_cost=commitment_cost_beta,
-    pos_dim_per_row=pos_dim_for_each_row,
-    num_quantizers=num_quantizers
+    use_VQ=use_VQ,
+    input_pos_as_seq=input_pos_as_seq,
+    tolerance_for_calc_threshold=tolerance_for_calc_threshold,
+    decay=decay
 ).to(device)
 
 if os.path.exists(modelpath):
@@ -96,7 +99,29 @@ reconstruction_loss_fn = nn.MSELoss()
 num_epochs = 120
 scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=6, num_training_steps=num_epochs)
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
-writer = SummaryWriter(log_dir=f"{log_dir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{time.strftime('%m%d-%H%M')}") # <--- TensorBoard 日志目录
+writer = SummaryWriter(log_dir=f"{log_dir}/test_{time.strftime('%m-%d_%H-%M')}")
+# Write model configuration to TensorBoard
+config_params = {
+    "use_diff": usediff,
+    "batch_size": batch_size,
+    "width_per_hrtf_row": hrtf_row_len,
+    "encoder_out_vec_num": encoder_out_vec_num,
+    "embed_dim": embed_dim,
+    "num_codebook_embeddings": num_codebook_embeddings,
+    "commitment_cost_beta": commitment_cost_beta,
+    **{f"encoder_transformer/{k}": v for k, v in transformer_encoder_settings.items()}, # 平铺字典
+    **{f"decoder_transformer/{k}": v for k, v in transformer_decoder_settings.items()}, # 平铺字典
+    "use_VQ": use_VQ,
+    "input_pos_as_seq": input_pos_as_seq,
+    "tolerance_for_calc_threshold": tolerance_for_calc_threshold,
+    "decay": decay,
+}
+config_text = "## Model Architecture Configuration\n\n"
+config_text += "| Parameter | Value |\n"
+config_text += "|:---|:---|\n"
+for key, value in config_params.items():
+    config_text += f"| {key} | {value} |\n"
+writer.add_text("model_config", config_text)
 # --- 训练循环 ---
 for epoch in range(num_epochs):
     model.train()
@@ -107,8 +132,6 @@ for epoch in range(num_epochs):
     indices_list = []
     for i, batch in enumerate(train_progress_bar):
         hrtf = batch["hrtf"].to(device) # 假设形状是 (batch, 793, 108)
-        if hrtf.dim() == 3:
-            hrtf = hrtf.unsqueeze(1) # -> (batch, 1, 793, 108)
         pos = batch["position"].to(device)   # (batch, 793, 3)
 
         optimizer.zero_grad()
@@ -116,10 +139,9 @@ for epoch in range(num_epochs):
         reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
         indices_list.append(indices)
         recon_loss = reconstruction_loss_fn(reconstructed_hrtf, hrtf)
-        total_loss = recon_loss + vq_loss # vq_loss 内部已包含 commitment_cost * e_latent_loss
+        total_loss = recon_loss + vq_loss * commitment_cost_beta # vq_loss 内部已包含 commitment_cost * e_latent_loss
         
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         optimizer.step()
         
         epoch_loss_recon += recon_loss.item()
@@ -137,9 +159,7 @@ for epoch in range(num_epochs):
     writer.add_scalar("train_loss_vq", avg_vq_loss_train, epoch)
     writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
     writer.add_scalar("activity", activity, epoch)
-    print(f"Epoch {epoch+1} Train: Recon Loss: {avg_recon_loss_train:.4f}, VQ Loss: {avg_vq_loss_train:.4f}")
-
-    # --- 验证循环 (可选) ---
+    # --- 验证循环 ---
     model.eval()
     val_loss_recon = 0
     val_loss_vq = 0
@@ -148,8 +168,6 @@ for epoch in range(num_epochs):
         val_progress_bar = tqdm.tqdm(test_loader, file=sys.stdout)
         for step, batch in enumerate(val_progress_bar):
             hrtf_val = batch["hrtf"].to(device)
-            if hrtf_val.dim() == 3:
-                hrtf_val = hrtf_val.unsqueeze(1)
             pos_val = batch["position"].to(device)
             
             reconstructed_hrtf_val, vq_loss_val, indices = model(hrtf_val, pos_val)
@@ -169,9 +187,10 @@ for epoch in range(num_epochs):
     writer.add_scalar("val_loss_vq", avg_vq_loss_val, epoch)
     writer.add_scalar("val_activity", activity_val, epoch)
     scheduler.step()
+    print("\n")
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/diff_{str(usediff)}_enc_n_{str(encoder_out_vec_num)}_enc_{str(transformer_settings_str)}_codebook_size_{str(num_codebook_embeddings)}_quan_n_{str(num_quantizers)}_{epoch+1}.pth")
+        torch.save(model.state_dict(), f"{weightdir}/savetime_{time.strftime('%m-%d_%H-%M')}.pth")
         print(f"Model saved at epoch {epoch+1}")
 
 print("Training finished.")

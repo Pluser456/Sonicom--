@@ -65,14 +65,14 @@ test_loader = DataLoader(
 
 # --- 模型实例化和优化器 ---
 from AEconfig import pos_dim_for_each_row,\
-      num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num
+      num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num
 
 
 model = HRTFAutoencoder(
     pos_dim_per_row=pos_dim_for_each_row,
     encoder_out_vec_num=encoder_out_vec_num,
     hrtf_num_rows=num_hrtf_rows,
-    hrtf_row_width=width_per_hrtf_row,
+    hrtf_row_width=hrtf_row_len,
     decoder_mlp_hidden_dims=decoder_mlp_layers,
     encoder_transformer_config=transformer_encoder_settings
 ).to(device)

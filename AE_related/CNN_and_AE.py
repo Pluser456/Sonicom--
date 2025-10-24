@@ -11,7 +11,7 @@ from tqdm import tqdm
 import sys
 from torch.utils.tensorboard import SummaryWriter
 from AE import HRTFAutoencoder
-from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, decoder_mlp_layers
+from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers
 
 def main():
     # 设备配置
@@ -168,7 +168,7 @@ def get_hrtf_feature(hrtf_files,
             latent_feature_dim=latent_dim,
             pos_dim_per_row=pos_dim_for_each_row,
             hrtf_num_rows=num_hrtf_rows,
-            hrtf_row_width=width_per_hrtf_row,
+            hrtf_row_width=hrtf_row_len,
             decoder_mlp_hidden_dims=decoder_mlp_layers,
             encoder_transformer_config=transformer_encoder_settings
         ).to(device)

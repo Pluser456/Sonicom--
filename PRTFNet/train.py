@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 def main():
     # 设备配置
-    current_model = "2D" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2D" # 选择 "2D" 或 "3D"
     # weightname = "best_model.pth"
     weightname = "nopretrain"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

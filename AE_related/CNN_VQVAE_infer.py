@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from AE import HRTF_VQVAE
 from AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, width_per_hrtf_row, transformer_encoder_settings, encoder_out_vec_num, \
+    num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, encoder_out_vec_num, \
     num_codebook_embeddings, commitment_cost_beta, num_quantizers
 
 def main():
@@ -55,7 +55,7 @@ def main():
         inputform = "image"
 
     hrtf_encoder = HRTF_VQVAE(
-        hrtf_row_width=width_per_hrtf_row,
+        hrtf_row_len=hrtf_row_len,
         hrtf_num_rows=num_hrtf_rows,
         encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
         encoder_transformer_config=transformer_encoder_settings,
