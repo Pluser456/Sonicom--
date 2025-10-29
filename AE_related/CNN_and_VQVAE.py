@@ -2,7 +2,6 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from TestNet import TestNet as threeDResnetANP
 from TestNet import ResNet3DClassifier as threeDResnet
 from TestNet import ResNet2DClassifier as twoDResnet
 from new_dataset import SonicomDataSet, OnlyHRTFDataSet
@@ -11,49 +10,36 @@ from tqdm import tqdm
 import sys
 from torch.utils.tensorboard import SummaryWriter
 from AE import HRTF_VQVAE
-from AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, encoder_out_vec_num, \
-    num_codebook_embeddings, commitment_cost_beta, num_quantizers
+from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
+    num_codebook_embeddings, use_VQ, input_pos_as_seq, \
+        tolerance_for_calc_threshold, decay
 import time
 
 def main():
     # 设备配置
     current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
+    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-27_22-09.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
-    if current_model == "3DResNetANP":
-        weightdir = "./ANP3Dweights"
-        ear_dir = "Ear_voxel"
-        isANP = True
-        if os.path.exists(weightdir) is False:
-            os.makedirs(weightdir)
-
-        # 从预训练模型加载权重
-        modelpath = f"{weightdir}/{weightname}"
-        positions_chosen_num = 793 # 训练集每个文件选择的方位数
-        model = threeDResnetANP(target_num_anp=5, positions_num=positions_chosen_num).to(device)
-        inputform ="voxel"
-    elif current_model == "3DResNet":
-        weightdir = "./CNN3Dweights"
+    if current_model == "3DResNet":
+        weightdir = "AE_related/CNN3D"
         ear_dir = "Ear_voxel_Wi"
-        isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
+        model = threeDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
-        weightdir = "./CNNweights"
+        weightdir = "AE_related/CNN"
         ear_dir = "Ear_image_gray_Wi"
-        isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
+        model = twoDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "image"
 
 
@@ -64,7 +50,7 @@ def main():
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], use_diff=usediff, calc_mean=usediff, status="test",mode="right")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], VQVAE_path=VQVAE_path, use_diff=usediff, status="test",mode="right")
 
 
     # 创建数据集
@@ -79,7 +65,7 @@ def main():
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], use_diff=usediff, calc_mean=False, status="test",mode="right", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], VQVAE_path=VQVAE_path, use_diff=usediff, status="test",mode="right", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -117,9 +103,9 @@ def main():
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-    optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-3)
+    optimizer = optim.AdamW(model.parameters(), lr=4e-4, weight_decay=1e-4)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.99) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.98) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
@@ -128,8 +114,20 @@ def main():
     
     patience = 50  # 早停的容忍次数
     patience_counter = 0
-    log_dir = f"runs/{current_model}"
-    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{time.strftime('%m%d-%H%M')}")
+    log_dir = weightdir
+    timestamp = time.strftime('%m%d-%H%M')
+    config_params = {
+    "use_diff": usediff,
+    "used_VQVAE": VQVAE_path,
+    "decay": decay,
+    }
+    config_text = "## Model Architecture Configuration\n\n"
+    config_text += "| Parameter | Value |\n"
+    config_text += "|:---|:---|\n"
+    for key, value in config_params.items():
+        config_text += f"| {key} | {value} |\n"
+    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{timestamp}")
+    writer.add_text("model_config", config_text)
 
     for epoch in range(0, num_epochs + 1):
         # 训练
@@ -139,6 +137,8 @@ def main():
         val_loss, val_acc = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
         writer.add_scalar("Loss/train", loss, epoch)
         writer.add_scalar("Loss/val", val_loss, epoch)
+        writer.add_scalar("Accuracy/train", acc, epoch)
+        writer.add_scalar("Accuracy/val", val_acc, epoch)
         writer.add_scalar("Learning Rate", optimizer.param_groups[0]['lr'], epoch)
         # 更新学习率调度器
         scheduler.step() # 在每个 epoch 结束后（或验证后）调用
@@ -147,7 +147,7 @@ def main():
         if val_acc > best_acc:
             best_acc = val_acc
             patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model_codebook_size_{str(num_codebook_embeddings)}_3D.pth")
+            torch.save(model.state_dict(), f"{weightdir}/best_model_{timestamp}.pth")
             print(f"Saved best model with validation accuracy: {best_acc:.4f}")
         else:
             patience_counter += 1
@@ -162,35 +162,39 @@ def main():
         #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
         #     print(f"Saved model at epoch {epoch}")
 
-def get_hrtf_feature(hrtf_files, 
+def get_hrtf_feature(hrtf_files, VQVAE_path,
                  status="train",
-                 calc_mean=True, use_diff=True,
+                 use_diff=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if VQVAE_path.endswith(".pth"):
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)
+    else:
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)['model_state_dict']
+    dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=use_diff, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
     hrtf_encoder = HRTF_VQVAE(
-    hrtf_row_len=hrtf_row_len,
-    hrtf_num_rows=num_hrtf_rows,
-    encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
-    encoder_transformer_config=transformer_encoder_settings,
-    num_embeddings=num_codebook_embeddings,
-    commitment_cost=commitment_cost_beta,
-    pos_dim_per_row=pos_dim_for_each_row,
-    num_quantizers=num_quantizers,
+        hrtf_row_len=state_dict['encoder.input_projection.weight'].shape[1],
+        encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
+        embed_dim=state_dict['encoder.input_projection.weight'].shape[0],
+        encoder_transformer_config=transformer_encoder_settings,
+        decoder_transformer_config=transformer_decoder_settings,
+        num_embeddings=num_codebook_embeddings,
+        use_VQ=use_VQ,
+        input_pos_as_seq=input_pos_as_seq,
+        tolerance_for_calc_threshold=tolerance_for_calc_threshold,
+        decay=decay
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load("HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_128_quan_n_3_120.pth", map_location=device,weights_only=True))
-    dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=calc_mean, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
+    hrtf_encoder.load_state_dict(state_dict)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
     hrtf_encoder.eval()
     with torch.no_grad():
         for batch in tqdm(dataloader, file=sys.stdout):
-            hrtf = batch["hrtf"].to(device).unsqueeze(1)
+            hrtf = batch["hrtf"].to(device)
             pos = batch["position"].to(device)
-            hrtf_feature = hrtf_encoder.encoder(hrtf, pos)
-            _, idx, _ = hrtf_encoder.vq_layer(hrtf_feature)
+            _, _ ,idx = hrtf_encoder(hrtf, pos)
             hrtf_data.append(idx)
     hrtf_data = torch.cat(hrtf_data, dim=0)
-    # hrtf_data = hrtf_data.permute((1,0,2,3))
     return hrtf_data
 
 if __name__ == "__main__":

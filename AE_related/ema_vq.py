@@ -147,6 +147,18 @@ class VectorQuantization(nn.Module):
                 self.embed.index_copy_(0, expired_idx, new_vecs)
                 self.cluster_size.index_fill_(0, expired_idx, self.avg_cluster_size)
                 self.embed_sum.index_copy_(0, expired_idx, new_vecs * self.avg_cluster_size)
+    def get_output_from_indices(self, embed_ind):
+        """根据码本索引获取量化结果
+
+        Args:
+            embed_ind (torch.Tensor): 码本索引，形状为 (batch_size, encoder_out_vec_num)
+
+        Returns:
+            quantize (torch.Tensor): 量化后的张量，形状为 zq: (B, encoder_out_vec_num, d_model)
+        """
+        quantize = F.embedding(embed_ind, self.embed) # (batch_size, encoder_out_vec_num, codebook_dim)
+        quantize = self.project_out(quantize) # (batch_size, encoder_out_vec_num, d_model)
+        return quantize
 
     def codebook_forward(self, x: torch.Tensor):
         """码本前向传播，计算量化结果和相关损失"""

@@ -18,7 +18,7 @@ weightname = "nopretrain"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 log_dir = "AE_related/HRTF_VQVAE" # <--- TensorBoard 日志目录
 usediff = False  # 是否使用差值HRTF数据
-batch_size = 4
+batch_size = 3
 
 weightdir = log_dir
 ear_dir = "Ear_image_gray_Wi"
@@ -89,15 +89,21 @@ model = HRTF_VQVAE(
     decay=decay
 ).to(device)
 
-if os.path.exists(modelpath):
-    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    print("Load model from", modelpath)
 print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
 optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-5) # VQVAE可能需要不同的学习率
 reconstruction_loss_fn = nn.MSELoss()
 num_epochs = 120
 scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=6, num_training_steps=num_epochs)
+if os.path.exists(modelpath):
+    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True)['model_state_dict'])
+    optimizer.load_state_dict(torch.load(modelpath, map_location=device, weights_only=False)['optimizer_state_dict'])
+    scheduler.load_state_dict(torch.load(modelpath, map_location=device, weights_only=False)['scheduler_state_dict'])
+    start_epoch = torch.load(modelpath, map_location=device, weights_only=False)['epoch'] + 1
+    print("Load model from", modelpath)
+else:
+    start_epoch = 0
+
 transformer_settings_str = "_".join([f"{key}-{value}" for key, value in transformer_encoder_settings.items()])
 writer = SummaryWriter(log_dir=f"{log_dir}/test_{time.strftime('%m-%d_%H-%M')}")
 # Write model configuration to TensorBoard
@@ -123,13 +129,13 @@ for key, value in config_params.items():
     config_text += f"| {key} | {value} |\n"
 writer.add_text("model_config", config_text)
 # --- 训练循环 ---
-for epoch in range(num_epochs):
+for epoch in range(start_epoch, num_epochs):
     model.train()
     epoch_loss_recon = 0
     epoch_loss_vq = 0
     
     train_progress_bar = tqdm.tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}", file=sys.stdout)
-    indices_list = []
+    indexes_list = []
     for i, batch in enumerate(train_progress_bar):
         hrtf = batch["hrtf"].to(device) # 假设形状是 (batch, 793, 108)
         pos = batch["position"].to(device)   # (batch, 793, 3)
@@ -137,7 +143,7 @@ for epoch in range(num_epochs):
         optimizer.zero_grad()
         
         reconstructed_hrtf, vq_loss, indices = model(hrtf, pos)
-        indices_list.append(indices)
+        indexes_list.append(indices)
         recon_loss = reconstruction_loss_fn(reconstructed_hrtf, hrtf)
         total_loss = recon_loss + vq_loss * commitment_cost_beta # vq_loss 内部已包含 commitment_cost * e_latent_loss
         
@@ -150,8 +156,8 @@ for epoch in range(num_epochs):
         train_progress_bar.desc = (f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.2f} "
                                    f"loss_vq: {epoch_loss_vq/(i+1):.2f} "
                                    f"lr: {optimizer.param_groups[0]['lr']:.2e} ")
-    indicies = torch.cat(indices_list, dim=1)
-    activity = torch.unique(indicies).numel() / num_codebook_embeddings * 100
+    indexes = torch.cat(indexes_list, dim=0)
+    activity = torch.unique(indexes).numel() / num_codebook_embeddings * 100
 
     avg_recon_loss_train = epoch_loss_recon / len(train_loader)
     avg_vq_loss_train = epoch_loss_vq / len(train_loader)
@@ -163,7 +169,7 @@ for epoch in range(num_epochs):
     model.eval()
     val_loss_recon = 0
     val_loss_vq = 0
-    indices_list = []
+    indexes_list = []
     with torch.no_grad():
         val_progress_bar = tqdm.tqdm(test_loader, file=sys.stdout)
         for step, batch in enumerate(val_progress_bar):
@@ -172,7 +178,7 @@ for epoch in range(num_epochs):
             
             reconstructed_hrtf_val, vq_loss_val, indices = model(hrtf_val, pos_val)
             recon_loss_val = reconstruction_loss_fn(reconstructed_hrtf_val, hrtf_val)
-            indices_list.append(indices)
+            indexes_list.append(indices)
             val_loss_recon += recon_loss_val.item()
             val_loss_vq += vq_loss_val.item()
             val_progress_bar.desc = (f"[valid epoch {epoch+1}] loss_recon: {val_loss_recon/(step+1):.3f} "
@@ -180,7 +186,7 @@ for epoch in range(num_epochs):
     
     avg_recon_loss_val = val_loss_recon / len(test_loader)
     avg_vq_loss_val = val_loss_vq / len(test_loader)
-    activity_val = torch.unique(torch.cat(indices_list, dim=1)).numel() / num_codebook_embeddings * 100
+    activity_val = torch.unique(torch.cat(indexes_list, dim=1)).numel() / num_codebook_embeddings * 100
     # print(f"Epoch {epoch+1} Valid: Recon Loss: {avg_recon_loss_val:.4f}, VQ Loss: {avg_vq_loss_val:.4f}")
     
     writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
@@ -188,9 +194,16 @@ for epoch in range(num_epochs):
     writer.add_scalar("val_activity", activity_val, epoch)
     scheduler.step()
     print("\n")
+
     # 保存模型
     if (epoch + 1) % 30 == 0:
-        torch.save(model.state_dict(), f"{weightdir}/savetime_{time.strftime('%m-%d_%H-%M')}.pth")
-        print(f"Model saved at epoch {epoch+1}")
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict()
+        }
+        torch.save(checkpoint, f"{weightdir}/savetime_{time.strftime('%m-%d_%H-%M')}.pt")
+        print(f"Checkpoint saved at epoch {epoch+1}")
 
 print("Training finished.")

@@ -3,6 +3,7 @@ FFT_HRTF/
 Ear_voxel/
 .vscode/
 *.pth
+*.pt
 *.zip
 NewCode/__pycache__/
 runs/
