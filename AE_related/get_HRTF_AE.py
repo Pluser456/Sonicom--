@@ -27,7 +27,7 @@ if current_model == "3DResNet":
     weightdir = "./CNN3Dweights"
     ear_dir = "Ear_voxel_Wi"
     isANP = False
-    model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
+    model = threeDResnet(d_model=num_codebook_embeddings).to(device)
     inputform = "voxel"
 elif current_model == "2DResNet":
     weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"

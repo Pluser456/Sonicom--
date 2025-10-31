@@ -11,15 +11,15 @@ import sys
 from torch.utils.tensorboard import SummaryWriter
 from AE import HRTF_VQVAE
 from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
-    num_codebook_embeddings, use_VQ, input_pos_as_seq, \
+    embed_dim, num_codebook_embeddings, use_VQ, input_pos_as_seq, \
         tolerance_for_calc_threshold, decay
 import time
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     weightname = "mode.pth"
-    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-27_22-09.pt"
+    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_20-49.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
@@ -30,7 +30,7 @@ def main():
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = threeDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
+        model = threeDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
         weightdir = "AE_related/CNN"
@@ -39,7 +39,7 @@ def main():
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
         # positions_chosen_num = 793
-        model = twoDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
+        model = twoDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "image"
 
 
@@ -47,10 +47,28 @@ def main():
         print("Load model from", modelpath)
         model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
     
+    if VQVAE_path.endswith(".pth"):
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)
+    else:
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)['model_state_dict']
+    hrtf_encoder = HRTF_VQVAE(
+        hrtf_row_len=state_dict['encoder.input_projection.weight'].shape[1],
+        encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
+        embed_dim=state_dict['encoder.input_projection.weight'].shape[0],
+        encoder_transformer_config=transformer_encoder_settings,
+        decoder_transformer_config=transformer_decoder_settings,
+        num_embeddings=num_codebook_embeddings,
+        use_VQ=use_VQ,
+        input_pos_as_seq=input_pos_as_seq,
+        tolerance_for_calc_threshold=tolerance_for_calc_threshold,
+        decay=decay
+    ).to(device).eval()
+    hrtf_encoder.load_state_dict(state_dict)
+    
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
 
-    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], VQVAE_path=VQVAE_path, use_diff=usediff, status="test",mode="right")
+    train_feature = get_hrtf_feature(dataset_paths["train_hrtf_list"], hrtf_encoder=hrtf_encoder, use_diff=usediff, status="test",mode="right")
 
 
     # 创建数据集
@@ -65,7 +83,7 @@ def main():
         provided_feature=train_feature
     )
 
-    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], VQVAE_path=VQVAE_path, use_diff=usediff, status="test",mode="right", 
+    test_feature = get_hrtf_feature(dataset_paths["test_hrtf_list"], hrtf_encoder=hrtf_encoder, use_diff=usediff, status="test",mode="right", 
                                 provided_mean_left=train_dataset.log_mean_hrtf_left,
                                 provided_mean_right=train_dataset.log_mean_hrtf_right)
     
@@ -120,21 +138,22 @@ def main():
     "use_diff": usediff,
     "used_VQVAE": VQVAE_path,
     "decay": decay,
+    "Total Parameters": sum(p.numel() for p in model.parameters() if p.requires_grad)
     }
     config_text = "## Model Architecture Configuration\n\n"
     config_text += "| Parameter | Value |\n"
     config_text += "|:---|:---|\n"
     for key, value in config_params.items():
         config_text += f"| {key} | {value} |\n"
-    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_2DResNet{timestamp}")
+    writer = SummaryWriter(log_dir=f"{log_dir}/VQVAE_{current_model}{timestamp}")
     writer.add_text("model_config", config_text)
-
+    print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     for epoch in range(0, num_epochs + 1):
         # 训练
-        loss, acc = train_one_epoch(model, optimizer, train_loader, device, epoch)
+        loss, acc = train_one_epoch(model,hrtf_encoder, optimizer, train_loader, device, epoch)
 
         # 验证
-        val_loss, val_acc = evaluate(model, test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
+        val_loss, val_acc = evaluate(model, hrtf_encoder,test_loader, device, epoch, auxiliary_loader=auxiliary_loader)
         writer.add_scalar("Loss/train", loss, epoch)
         writer.add_scalar("Loss/val", val_loss, epoch)
         writer.add_scalar("Accuracy/train", acc, epoch)
@@ -162,29 +181,10 @@ def main():
         #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
         #     print(f"Saved model at epoch {epoch}")
 
-def get_hrtf_feature(hrtf_files, VQVAE_path,
-                 status="train",
-                 use_diff=True,
+def get_hrtf_feature(hrtf_files, hrtf_encoder, status="train", use_diff=True,
                  mode="both", provided_mean_left=None, provided_mean_right=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if VQVAE_path.endswith(".pth"):
-        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)
-    else:
-        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)['model_state_dict']
     dataset = OnlyHRTFDataSet(hrtf_files, status=status, calc_mean=use_diff, use_diff=use_diff, mode=mode, provided_mean_left=provided_mean_left, provided_mean_right=provided_mean_right)
-    hrtf_encoder = HRTF_VQVAE(
-        hrtf_row_len=state_dict['encoder.input_projection.weight'].shape[1],
-        encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
-        embed_dim=state_dict['encoder.input_projection.weight'].shape[0],
-        encoder_transformer_config=transformer_encoder_settings,
-        decoder_transformer_config=transformer_decoder_settings,
-        num_embeddings=num_codebook_embeddings,
-        use_VQ=use_VQ,
-        input_pos_as_seq=input_pos_as_seq,
-        tolerance_for_calc_threshold=tolerance_for_calc_threshold,
-        decay=decay
-    ).to(device)
-    hrtf_encoder.load_state_dict(state_dict)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     hrtf_data = []
     hrtf_encoder.eval()
@@ -192,8 +192,8 @@ def get_hrtf_feature(hrtf_files, VQVAE_path,
         for batch in tqdm(dataloader, file=sys.stdout):
             hrtf = batch["hrtf"].to(device)
             pos = batch["position"].to(device)
-            _, _ ,idx = hrtf_encoder(hrtf, pos)
-            hrtf_data.append(idx)
+            ze = hrtf_encoder.encoder(hrtf, pos)
+            hrtf_data.append(ze)
     hrtf_data = torch.cat(hrtf_data, dim=0)
     return hrtf_data
 

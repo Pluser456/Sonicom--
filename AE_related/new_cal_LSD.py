@@ -2,7 +2,6 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from TestNet import TestNet as threeDResnetANP
 from TestNet import ResNet3DClassifier as threeDResnet
 from TestNet import ResNet2DClassifier as twoDResnet
 from new_dataset import SonicomDataSet, SingleSubjectDataSet
@@ -10,11 +9,12 @@ from utils import split_dataset
 import numpy as np
 import matplotlib.pyplot as plt
 from AE import HRTF_VQVAE
-from AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    num_codebook_embeddings, commitment_cost_beta, num_quantizers
+from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
+    hrtf_row_len, num_codebook_embeddings, commitment_cost_beta, embed_dim, use_VQ, input_pos_as_seq, \
+        tolerance_for_calc_threshold, decay
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-27_22-09.pt"
 
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader, usediff=False):
     model.eval()
@@ -29,12 +29,10 @@ def evaluate_one_hrtf(model, hrtf_encoder, test_loader, usediff=False):
             meanloghrtf = batch["meanlog"].to(device)  # [batch]
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
-            pred, _ = model(right_picture, device=device) # [batch_size, 18]
-            # pred = pred.reshape(-1, 3, 3)
-            # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
-            # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
-            zq = hrtf_encoder.vq_layer.get_output_from_indices(pred)
-            outputs = hrtf_encoder.decoder(zq, pos).squeeze(1)  # [batch_size, 90]
+            pred = model(right_picture, device=device)
+            with torch.no_grad():
+                zq, idx, _ = hrtf_encoder.quantize(pred)
+            outputs = hrtf_encoder.decoder(zq, pos)
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
@@ -61,20 +59,20 @@ if __name__ == "__main__":
     batch_size = 32
     usediff = False  # 是否使用差分数据
 
-    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     if current_model == "3DResNet":
-        weightname = f"best_model_codebook_size_{num_codebook_embeddings}_3D.pth"
-        weightdir = "./CNN3Dweights"
+        weightname = "best_model_1030-0217.pth"
+        weightdir = "AE_related/CNN3D"
         ear_dir = "Ear_voxel_Wi"
         isANP = False
-        model = threeDResnet(num_classes=num_codebook_embeddings).to(device)
+        model = threeDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
-        weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
-        weightdir = "./CNNweights"
+        weightname = "best_model_1030-1756.pth"
+        weightdir = "AE_related/CNN"
         ear_dir = "Ear_image_gray_Wi"
         isANP = False
-        model = twoDResnet(num_classes=num_codebook_embeddings).to(device)
+        model = twoDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "image"
 
     if os.path.exists(weightdir) is False:
@@ -82,20 +80,27 @@ if __name__ == "__main__":
     modelpath = f"{weightdir}/{weightname}"
     # positions_chosen_num = 793
 
-    model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    print("Load model from", modelpath)
+    if os.path.exists(modelpath):
+        model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
+        print("Load model from", modelpath)
+    if VQVAE_path.endswith(".pth"):
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)
+    else:
+        state_dict = torch.load(VQVAE_path, map_location=device,weights_only=True)['model_state_dict']
     hrtf_encoder = HRTF_VQVAE(
-        hrtf_row_len=hrtf_row_len,
-        hrtf_num_rows=num_hrtf_rows,
+        hrtf_row_len=state_dict['encoder.input_projection.weight'].shape[1],
         encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
+        embed_dim=state_dict['encoder.input_projection.weight'].shape[0],
         encoder_transformer_config=transformer_encoder_settings,
+        decoder_transformer_config=transformer_decoder_settings,
         num_embeddings=num_codebook_embeddings,
-        commitment_cost=commitment_cost_beta,
-        pos_dim_per_row=pos_dim_for_each_row,
-        num_quantizers=num_quantizers
+        use_VQ=use_VQ,
+        input_pos_as_seq=input_pos_as_seq,
+        tolerance_for_calc_threshold=tolerance_for_calc_threshold,
+        decay=decay
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{num_codebook_embeddings}_quan_n_3_120.pth", map_location=device, weights_only=True))
-    print("Load hrtf_encoder")
+    hrtf_encoder.load_state_dict(state_dict)
+    print("Load HRTF encoder")
 
     res_list = []
     pred_list = []

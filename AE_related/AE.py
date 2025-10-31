@@ -189,20 +189,24 @@ class HRTF_VQVAE(nn.Module):
         )
         self.use_VQ = use_VQ
 
+    def quantize(self, ze):
+        zq_list = []
+        indices_list = []
+        vq_loss_total = 0
+        for i in range(self.encoder_out_vec_num):
+            zq, indices, vq_loss = self.vq_layer[i](ze[:, i, :])
+            zq_list.append(zq)
+            indices_list.append(indices)
+            vq_loss_total += vq_loss
+        vq_loss = vq_loss_total / self.encoder_out_vec_num
+        zq = torch.stack(zq_list, dim=1)
+        indices = torch.stack(indices_list, dim=1)
+        return zq,indices,vq_loss
+
     def forward(self, hrtf_data, pos_data):
         ze = self.encoder(hrtf_data, pos_data) # ze: (B, encoder_out_vec_num, d_model)
         if self.use_VQ:
-            zq_list = []
-            indices_list = []
-            vq_loss_total = 0
-            for i in range(self.encoder_out_vec_num):
-                zq, indices, vq_loss = self.vq_layer[i](ze[:, i, :])
-                zq_list.append(zq)
-                indices_list.append(indices)
-                vq_loss_total += vq_loss
-            vq_loss = vq_loss_total / self.encoder_out_vec_num
-            zq = torch.stack(zq_list, dim=1)
-            indices = torch.stack(indices_list, dim=1)
+            zq, indices, vq_loss = self.quantize(ze)
             reconstructed_hrtf = self.decoder(zq, pos_data)
             return reconstructed_hrtf, vq_loss, indices
         else:

@@ -94,7 +94,7 @@ def calculate_hrtf_mean(hrtf_file_names, whichear=None):
     hrtf_mean = hrtf_sum / total_samples
     return hrtf_mean  # 保持与原始数据相同的精度
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch):
+def train_one_epoch(model, hrtf_encoder, optimizer, data_loader, device, epoch):
     model.train()
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
@@ -120,12 +120,14 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
             loss = loss_function(mu, target_y_sel)
         elif model.modelname == "3DResNetClassifier":
-            loss_function = nn.CrossEntropyLoss()
             right_voxel = sample_batch["right_voxel"]
-            feature = sample_batch["feature"] # (batch_size, encoder_out_vec_num)
-            pred, logits = model(right_voxel, device=device)
-            loss = loss_function(logits, feature)
-            accuracy += (pred == feature).float().mean()
+            feature = sample_batch["feature"] # (batch_size, encoder_out_vec_num, d_model)
+            pred = model(right_voxel, device=device)
+            with torch.no_grad():
+                true_idx = hrtf_encoder.quantize(feature)[1]
+                pred_idx = hrtf_encoder.quantize(pred)[1]
+            loss = loss_function(pred, feature)
+            accuracy += (pred_idx == true_idx).float().mean()
         elif model.modelname == "3DResNet":
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
@@ -135,17 +137,15 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             mu, target_y_sel = model(left_voxel, right_voxel, pos, hrtf, device=device)
             loss = loss_function(mu, target_y_sel)
         elif model.modelname == "2DResNetClassifier":
-            loss_function = nn.CrossEntropyLoss()
             # left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
-            # pos = sample_batch["position"]
-            # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
-            # feature = feature.reshape(feature.shape[0], -1)[:, 0]
-
-            pred, logits = model(right_voxel, device=device)
-            loss = loss_function(logits, feature)
-            accuracy += (pred == feature).float().mean()
+            pred = model(right_voxel, device=device)
+            with torch.no_grad():
+                true_idx = hrtf_encoder.quantize(feature)[1]
+                pred_idx = hrtf_encoder.quantize(pred)[1]
+            loss = loss_function(pred, feature)
+            accuracy += (pred_idx == true_idx).float().mean()
 
         accu_loss += loss.detach()
 
@@ -161,7 +161,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
 
     return final_loss, accuracy.item() / (step + 1)
 
-def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
+def evaluate(model, hrtf_encoder, data_loader, device, epoch, auxiliary_loader=None):
     model.eval()
     loss_function = nn.MSELoss()
     accu_loss = torch.zeros(1).to(device)
@@ -183,28 +183,28 @@ def evaluate(model, data_loader, device, epoch, auxiliary_loader=None):
 
                 loss = loss_function(mu, target)
             elif model.modelname == "2DResNetClassifier":
-                loss_function = nn.CrossEntropyLoss()
                 # left_voxel = sample_batch["left_voxel"]
                 right_voxel = sample_batch["right_voxel"]
                 # pos = sample_batch["position"]
                 # hrtf = sample_batch["hrtf"]
                 feature = sample_batch["feature"]
                 # feature = feature.reshape(feature.shape[0], -1)[:, 0]
-
-                preds, logits = model(right_voxel, device=device)
-
-                accuracy = (preds == feature).float().mean()
-                loss = loss_function(logits, feature)
-
+                pred = model(right_voxel, device=device)
+                with torch.no_grad():
+                    true_idx = hrtf_encoder.quantize(feature)[1]
+                    pred_idx = hrtf_encoder.quantize(pred)[1]
+                loss = loss_function(pred, feature)
+                accuracy = (pred_idx == true_idx).float().mean()
                 tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNetClassifier":
-                loss_function = nn.CrossEntropyLoss()
                 right_voxel = sample_batch["right_voxel"]
-                feature = sample_batch["feature"]
-                # feature = feature.reshape(feature.shape[0], -1)[:, 0]
-                preds, logits = model(right_voxel, device=device)
-                accuracy = (preds == feature).float().mean()
-                loss = loss_function(logits, feature)
+                feature = sample_batch["feature"] # (batch_size, encoder_out_vec_num, d_model)
+                pred = model(right_voxel, device=device)
+                with torch.no_grad():
+                    true_idx = hrtf_encoder.quantize(feature)[1]
+                    pred_idx = hrtf_encoder.quantize(pred)[1]
+                loss = loss_function(pred, feature)
+                accuracy = (pred_idx == true_idx).float().mean()
                 tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNet":
                 left_voxel = sample_batch["left_voxel"]

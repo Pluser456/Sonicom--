@@ -15,31 +15,29 @@ from AEconfig import transformer_encoder_settings, transformer_decoder_settings,
 
 def main():
     # 设备配置
-    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = "best_model_codebook_size_6_3D.pth"
-    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-27_22-09.pt"
+    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_20-49.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
     if current_model == "3DResNet":
+        weightname = "best_model_1031-0215.pth"
         weightdir = "AE_related/CNN3D"
         ear_dir = "Ear_voxel_Wi"
         isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
-        positions_chosen_num = 793
-        model = threeDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
+        model = threeDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "voxel"
     elif current_model == "2DResNet":
+        weightname = "best_model_1030-1756.pth"
         weightdir = "AE_related/CNN"
         ear_dir = "Ear_image_gray_Wi"
-        isANP = False
         if os.path.exists(weightdir) is False:
             os.makedirs(weightdir)
         modelpath = f"{weightdir}/{weightname}"
-        # positions_chosen_num = 793
-        model = twoDResnet(num_classes=num_codebook_embeddings, encoder_out_vec_num=encoder_out_vec_num).to(device)
+        model = twoDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
         inputform = "image"
 
     if VQVAE_path.endswith(".pth"):
@@ -124,22 +122,18 @@ def main():
             hrtf = batch["hrtf"].to(device)
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
-            pred, logits = model(right_picture, device=device) # (batch_size, encoder_out_vec_num)
-
+            pred = model(right_picture, device=device)
+            with torch.no_grad():
+                zq, idx, _ = hrtf_encoder.quantize(pred)
             # pred = pred.reshape(-1, 2, 3, 3)
             # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
             # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
 
             _, _, true_pred = hrtf_encoder(hrtf, pos)
-            zq_list = []
-            for i in range(hrtf_encoder.encoder_out_vec_num):
-                zq_i = hrtf_encoder.vq_layer[i].get_output_from_indices(pred[:, i]) # (batch_size, d_model)
-                zq_list.append(zq_i)
-            zq = torch.stack(zq_list, dim=1)  # (batch_size, encoder_out_vec_num, d_model)
 
             output = hrtf_encoder.decoder(zq, pos)
             loss = criterion(output, hrtf)
-            acc = (pred == true_pred).float().mean()
+            acc = (idx == true_pred).float().mean()
             total_loss += loss.item() * hrtf.shape[0]
             total_acc += acc.item() * hrtf.shape[0]
             size += hrtf.shape[0]

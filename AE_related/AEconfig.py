@@ -6,7 +6,7 @@ num_hrtf_rows = 2562       # HRTF的行数 (序列长度)
 # width_per_hrtf_row = 108  # HRTF每行的宽度 (特征维度 embed_dim)
 hrtf_row_len = 90  # HRTF每行的宽度 (特征维度 embed_dim)
 current_encoder_type = "transformer"
-encoder_out_vec_num = 12
+encoder_out_vec_num = 8
 # 为Transformer编码器配置 (如果选择 "transformer")
 # embed_dim (hrtf_row_width=108) 必须能被 num_heads 整除
 transformer_encoder_settings = {
@@ -24,7 +24,7 @@ transformer_decoder_settings = {
 
 
 # VQ-VAE 特定参数
-num_codebook_embeddings = 6 # 码本大小
+num_codebook_embeddings = 8 # 码本大小
 use_VQ = True  # 是否使用向量量化
 input_pos_as_seq = False  # 是否将位置作为序列输入给解码器
 
