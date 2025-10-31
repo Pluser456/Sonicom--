@@ -243,6 +243,19 @@ class ResNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
 
+def resnet18(**kwargs) -> ResNet:
+    """ResNet-18 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__.
+
+    Args:
+        **kwargs: parameters passed to the ``torchvision.models.resnet.ResNet``
+            base class. Please refer to the `source code
+            <https://github.com/pytorch/vision/blob/main/torchvision/models/resnet.py>`_
+            for more details about this class.
+
+    .. autoclass:: torchvision.models.ResNet34_Weights
+        :members:
+    """
+    return ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
 
 def resnet34(**kwargs) -> ResNet:
     """ResNet-34 from `Deep Residual Learning for Image Recognition <https://arxiv.org/abs/1512.03385>`__.

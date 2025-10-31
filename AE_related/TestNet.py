@@ -2,7 +2,9 @@ from re import T
 import torch
 from torch import nn
 from ResNet3D import resnet34_3d
-from ResNet import resnet34 as resnet2d
+from ResNet3D import resnet18_3d
+from ResNet import resnet34
+from ResNet import resnet18
 import numpy as np
 import torch.nn.functional as F
 
@@ -29,7 +31,7 @@ class FeatureExtractor2D(nn.Module):
     """图像特征提取网络"""
     def __init__(self):
         super(FeatureExtractor2D, self).__init__()
-        self.conv_net = resnet2d()
+        self.conv_net = resnet18()
         
     def forward(self, voxel_right):
         # 提取右耳特征
@@ -199,21 +201,29 @@ class ResidualBlock(nn.Module):
 class ResNet2DClassifier(nn.Module):
     """修改为多头分类网络，每个位置使用独立的分类头"""
     modelname = "2DResNetClassifier"
-    def __init__(self, num_classes=128):
+    def __init__(self, num_classes=16, encoder_out_vec_num=8):
         super(ResNet2DClassifier, self).__init__()
-        self.feature_extractor = resnet2d(num_classes=num_classes)
+        self.feature_extractor = resnet18(num_classes=1024)
+        self.encoder_out_vec_num = encoder_out_vec_num
+        self.num_classes = num_classes
+        self.vq_layer = nn.ModuleList([ nn.Sequential(nn.Linear(1024, num_classes),
+            # nn.Dropout(0.3),
+            nn.ReLU(), nn.Linear(num_classes, num_classes)) for _ in range(encoder_out_vec_num)])
 
     def forward(self, right_voxel, device):
         # 体素特征提取
         right_voxel = right_voxel.to(device)
-        logits = self.feature_extractor(right_voxel) # [batch_size, img_feature_dim]
+        features = self.feature_extractor(right_voxel) # [batch_size, img_feature_dim]
+        logits = torch.zeros((features.shape[0], self.num_classes, self.encoder_out_vec_num)).to(device)  # [batch_size, num_classes, encoder_out_vec_num]
+        for i in range(self.encoder_out_vec_num):
+            logits[:, :, i] = self.vq_layer[i](features)
 
         # 释放内存
         del right_voxel
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         # 获取预测类别
-        predictions = torch.argmax(logits, dim=1)  # [batch_size]
+        predictions = torch.argmax(logits, dim=1)  # [batch_size, encoder_out_vec_num]
 
         return predictions, logits
     
@@ -222,7 +232,7 @@ class ResNet3DClassifier(nn.Module):
     modelname = "3DResNetClassifier"
     def __init__(self, num_classes=16, encoder_out_vec_num=8):
         super(ResNet3DClassifier, self).__init__()
-        self.feature_extractor = resnet34_3d(num_classes=1024)
+        self.feature_extractor = resnet18_3d(num_classes=1024)
         self.encoder_out_vec_num = encoder_out_vec_num
         self.num_classes = num_classes
         self.vq_layer = nn.ModuleList([ nn.Sequential(nn.Linear(1024, num_classes),

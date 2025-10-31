@@ -138,8 +138,6 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
             loss_function = nn.CrossEntropyLoss()
             # left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
-            # pos = sample_batch["position"]
-            # hrtf = sample_batch["hrtf"]
             feature = sample_batch["feature"]
             # feature = feature.reshape(feature.shape[0], -1)[:, 0]
 

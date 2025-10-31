@@ -121,6 +121,7 @@ config_params = {
     "input_pos_as_seq": input_pos_as_seq,
     "tolerance_for_calc_threshold": tolerance_for_calc_threshold,
     "decay": decay,
+    "Total Parameters": sum(p.numel() for p in model.parameters() if p.requires_grad)
 }
 config_text = "## Model Architecture Configuration\n\n"
 config_text += "| Parameter | Value |\n"
