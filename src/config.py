@@ -9,13 +9,14 @@ PROJECT_ROOT = Path(__file__).parent.parent
 # 数据路径
 DATA_PATHS = {
     "sonicom": {
-        "hrtf": PROJECT_ROOT / "FFT_HRTF",
-        "ear_voxel": PROJECT_ROOT / "Ear_voxel",
-        "ear_image": PROJECT_ROOT / "Ear_image_gray",
+        "hrtf": PROJECT_ROOT / "data" / "sonicom" / "hrtf",
+        "ear_voxel": PROJECT_ROOT / "data" / "sonicom" / "ear_voxel",
+        "ear_image": PROJECT_ROOT / "data" / "sonicom" / "ear_image",
     },
     "widedspread": {
-        "hrtf": PROJECT_ROOT / "FFT_HRTF_Wi",
-        "ear_voxel": PROJECT_ROOT / "Ear_voxel_Wi",
+        "hrtf": PROJECT_ROOT / "data" / "widedspread" / "hrtf",
+        "ear_voxel": PROJECT_ROOT / "data" / "widedspread" / "ear_voxel",
+        "ear_image": PROJECT_ROOT / "data" / "widedspread" / "ear_image",
     },
 }
 

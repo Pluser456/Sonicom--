@@ -1,2 +1,0 @@
-Epoch, Step, Train Loss, Val Loss
-
