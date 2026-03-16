@@ -15,13 +15,14 @@ from AEconfig import transformer_encoder_settings, transformer_decoder_settings,
 
 def main():
     # 设备配置
-    current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_20-49.pt"
+    current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
+    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_06-35.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
     if current_model == "3DResNet":
-        weightname = "best_model_1031-0215.pth"
+        weightname = "best_model_1102-2345.pth"
+        # weightname = "no_pretrain"
         weightdir = "AE_related/CNN3D"
         ear_dir = "Ear_voxel_Wi"
         isANP = False
@@ -56,7 +57,7 @@ def main():
         tolerance_for_calc_threshold=tolerance_for_calc_threshold,
         decay=decay
     ).to(device)
-    hrtf_encoder.load_state_dict(state_dict)
+    hrtf_encoder.load_state_dict(state_dict, strict=False)
     print("Load HRTF encoder")
 
     if os.path.exists(modelpath):
@@ -123,19 +124,19 @@ def main():
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
             pred = model(right_picture, device=device)
-            with torch.no_grad():
-                zq, idx, _ = hrtf_encoder.quantize(pred)
+            # with torch.no_grad():
+            #     zq, idx, _ = hrtf_encoder.quantize(pred)
             # pred = pred.reshape(-1, 2, 3, 3)
             # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
             # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
 
-            _, _, true_pred = hrtf_encoder(hrtf, pos)
+            # _, _, true_pred = hrtf_encoder(hrtf, pos)
 
-            output = hrtf_encoder.decoder(zq, pos)
+            output = hrtf_encoder.decoder(pred, pos)
             loss = criterion(output, hrtf)
-            acc = (idx == true_pred).float().mean()
+            acc = 0
             total_loss += loss.item() * hrtf.shape[0]
-            total_acc += acc.item() * hrtf.shape[0]
+            total_acc += acc * hrtf.shape[0]
             size += hrtf.shape[0]
             progressbar.desc = f"Loss: {total_loss / size:.3f}, Acc: {total_acc / size:.3f}"
 

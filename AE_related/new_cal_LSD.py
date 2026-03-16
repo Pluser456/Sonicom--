@@ -14,7 +14,8 @@ from AEconfig import transformer_encoder_settings, transformer_decoder_settings,
         tolerance_for_calc_threshold, decay
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-27_22-09.pt"
+# VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_06-35.pt"
+VQVAE_path = "AE_related/joint_training/without_VQ/HRTF_VQVAE/savetime_1110-1228.pt"
 
 def evaluate_one_hrtf(model, hrtf_encoder, test_loader, usediff=False):
     model.eval()
@@ -30,9 +31,9 @@ def evaluate_one_hrtf(model, hrtf_encoder, test_loader, usediff=False):
             pos = batch["position"].to(device)
             right_picture = batch["right_voxel"].to(device)
             pred = model(right_picture, device=device)
-            with torch.no_grad():
-                zq, idx, _ = hrtf_encoder.quantize(pred)
-            outputs = hrtf_encoder.decoder(zq, pos)
+            # with torch.no_grad():
+            #     zq, idx, _ = hrtf_encoder.quantize(pred)
+            outputs = hrtf_encoder.decoder(pred, pos)
             # 添加epsilon防止log(0)
             targets = targets + 1e-8
 
@@ -61,8 +62,9 @@ if __name__ == "__main__":
 
     current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
     if current_model == "3DResNet":
-        weightname = "best_model_1030-0217.pth"
-        weightdir = "AE_related/CNN3D"
+        weightname = "best_model_1110-1228.pth"
+        weightdir = r"AE_related/joint_training/without_VQ/CNN3D"
+        # weightdir = "AE_related/CNN3D"
         ear_dir = "Ear_voxel_Wi"
         isANP = False
         model = threeDResnet(d_model=embed_dim, encoder_out_vec_num=encoder_out_vec_num).to(device)
@@ -99,7 +101,7 @@ if __name__ == "__main__":
         tolerance_for_calc_threshold=tolerance_for_calc_threshold,
         decay=decay
     ).to(device)
-    hrtf_encoder.load_state_dict(state_dict)
+    hrtf_encoder.load_state_dict(state_dict, strict=False)
     print("Load HRTF encoder")
 
     res_list = []

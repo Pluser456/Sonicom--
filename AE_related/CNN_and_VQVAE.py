@@ -18,8 +18,9 @@ import time
 def main():
     # 设备配置
     current_model = "2DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = "mode.pth"
-    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_20-49.pt"
+    # weightname = "best_model_1101-0005.pth"
+    weightname = "no_pretrain"
+    VQVAE_path = "AE_related/HRTF_VQVAE/savetime_10-26_06-35.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     usediff = False  # 是否使用差值HRTF数据
 
@@ -63,7 +64,7 @@ def main():
         tolerance_for_calc_threshold=tolerance_for_calc_threshold,
         decay=decay
     ).to(device).eval()
-    hrtf_encoder.load_state_dict(state_dict)
+    hrtf_encoder.load_state_dict(state_dict, strict=False)
     
     # 数据分割
     dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
@@ -95,7 +96,7 @@ def main():
         status="test",
         inputform=inputform,
         mode="right",
-        use_diff=usediff,
+        use_diff=usediff,                  
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right,
         provided_feature=test_feature
@@ -123,7 +124,7 @@ def main():
     )
     optimizer = optim.AdamW(model.parameters(), lr=4e-4, weight_decay=1e-4)
     # 学习率调度器: 每 step_size 个 epoch，学习率乘以 gamma
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.98) # 例如，每100个epoch学习率减半
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=3, gamma=0.99) # 例如，每100个epoch学习率减半
     
     # 训练循环
     num_epochs = 480*5
@@ -138,7 +139,8 @@ def main():
     "use_diff": usediff,
     "used_VQVAE": VQVAE_path,
     "decay": decay,
-    "Total Parameters": sum(p.numel() for p in model.parameters() if p.requires_grad)
+    "Total Parameters": sum(p.numel() for p in model.parameters() if p.requires_grad),
+    "CNN_output": "Embeddings, but no use of VQ"
     }
     config_text = "## Model Architecture Configuration\n\n"
     config_text += "| Parameter | Value |\n"
@@ -163,17 +165,17 @@ def main():
         scheduler.step() # 在每个 epoch 结束后（或验证后）调用
 
         # 检查是否是最佳模型
-        if val_acc > best_acc:
-            best_acc = val_acc
+        if best_loss > val_loss:
+            best_loss = val_loss
             patience_counter = 0  # 重置早停计数器
             torch.save(model.state_dict(), f"{weightdir}/best_model_{timestamp}.pth")
-            print(f"Saved best model with validation accuracy: {best_acc:.4f}")
+            print(f"Saved best model with validation loss: {best_loss:.4f}")
         else:
             patience_counter += 1
 
         # 检查早停条件
         if patience_counter >= patience:
-            print(f"Early stopping triggered after {epoch} epochs with best validation accuracy: {best_acc:.4f}")
+            print(f"Early stopping triggered after {epoch} epochs with best validation loss: {best_loss:.4f}")
             break
 
         # 保存当前模型

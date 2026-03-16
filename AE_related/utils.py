@@ -123,11 +123,8 @@ def train_one_epoch(model, hrtf_encoder, optimizer, data_loader, device, epoch):
             right_voxel = sample_batch["right_voxel"]
             feature = sample_batch["feature"] # (batch_size, encoder_out_vec_num, d_model)
             pred = model(right_voxel, device=device)
-            with torch.no_grad():
-                true_idx = hrtf_encoder.quantize(feature)[1]
-                pred_idx = hrtf_encoder.quantize(pred)[1]
             loss = loss_function(pred, feature)
-            accuracy += (pred_idx == true_idx).float().mean()
+            accuracy = torch.zeros([1]).cuda()
         elif model.modelname == "3DResNet":
             left_voxel = sample_batch["left_voxel"]
             right_voxel = sample_batch["right_voxel"]
@@ -141,11 +138,8 @@ def train_one_epoch(model, hrtf_encoder, optimizer, data_loader, device, epoch):
             right_voxel = sample_batch["right_voxel"]
             feature = sample_batch["feature"]
             pred = model(right_voxel, device=device)
-            with torch.no_grad():
-                true_idx = hrtf_encoder.quantize(feature)[1]
-                pred_idx = hrtf_encoder.quantize(pred)[1]
             loss = loss_function(pred, feature)
-            accuracy += (pred_idx == true_idx).float().mean()
+            accuracy = torch.zeros([1]).cuda()
 
         accu_loss += loss.detach()
 
@@ -190,21 +184,15 @@ def evaluate(model, hrtf_encoder, data_loader, device, epoch, auxiliary_loader=N
                 feature = sample_batch["feature"]
                 # feature = feature.reshape(feature.shape[0], -1)[:, 0]
                 pred = model(right_voxel, device=device)
-                with torch.no_grad():
-                    true_idx = hrtf_encoder.quantize(feature)[1]
-                    pred_idx = hrtf_encoder.quantize(pred)[1]
                 loss = loss_function(pred, feature)
-                accuracy = (pred_idx == true_idx).float().mean()
+                accuracy = torch.zeros([1]).cuda()
                 tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNetClassifier":
                 right_voxel = sample_batch["right_voxel"]
                 feature = sample_batch["feature"] # (batch_size, encoder_out_vec_num, d_model)
                 pred = model(right_voxel, device=device)
-                with torch.no_grad():
-                    true_idx = hrtf_encoder.quantize(feature)[1]
-                    pred_idx = hrtf_encoder.quantize(pred)[1]
                 loss = loss_function(pred, feature)
-                accuracy = (pred_idx == true_idx).float().mean()
+                accuracy = torch.zeros([1]).cuda()
                 tot_accuracy += accuracy.detach()
             elif model.modelname == "3DResNet":
                 left_voxel = sample_batch["left_voxel"]

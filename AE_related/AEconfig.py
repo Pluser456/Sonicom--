@@ -25,7 +25,7 @@ transformer_decoder_settings = {
 
 # VQ-VAE 特定参数
 num_codebook_embeddings = 8 # 码本大小
-use_VQ = True  # 是否使用向量量化
+use_VQ = False  # 是否使用向量量化
 input_pos_as_seq = False  # 是否将位置作为序列输入给解码器
 
 # 码本相关参数
