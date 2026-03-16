@@ -1,50 +1,59 @@
+# IDE
 .vscode/
+.idea/
+*.code-workspace
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# 模型权重和日志
 *.pth
 *.pt
-*.zip
-NewCode/__pycache__/
-runs/
-*.code-workspace
-.idea/
-*.png
-*.pyc
-*.yaml
 *.ckpt
-tb_logs/
-NewVAECode/CVAEweights/
-weights_ws/
-weights_ws2/
-weights/
-
-# 新架构目录
-src/__pycache__/
-src/models/__pycache__/
-src/dataset/__pycache__/
-src/loss/__pycache__/
-src/utils/__pycache__/
-scripts/__pycache__/
-configs/
+*.zip
 logs/
 checkpoints/
-notebooks/
+tb_logs/
+runs/
+
+# 数据
 data/
-src/models/quantizer/
-src/models/vector-quantize-pytorch-master/
+*.mat
 
-# 忽略 results 目录下的数据文件和生成的图片
-results/**/*.txt
-results/**/*.pdf
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# 配置文件（敏感）
+*.yaml
+!configs/*.yaml.example
+configs/
+
+# 图像和结果
 results/**/*.png
+results/**/*.pdf
+results/**/*.txt
 
-# 忽略tensorboard日志文件
-*.0
-AE_related/ideas.md
+# 临时文件
+*.tmp
+*.log
+.DS_Store
 
-# 保留原始目录（逐步迁移后删除）
-AE_related/
-AE_related_Sonicom/
-NewVAECode/
-NewANPCode/
-NewANPCode3D/
-NewCNNCode/
-NewCNNcode3D/
+# 保留的示例文件
+!configs/*.yaml.example
+
+# 特殊代码目录
+src/models/vector-quantize-pytorch-master
+src/models/quantizer
+
