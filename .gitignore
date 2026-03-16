@@ -25,6 +25,20 @@ weights_ws2/
 weights/
 quantizer/
 
+# 新架构目录
+src/__pycache__/
+src/models/__pycache__/
+src/dataset/__pycache__/
+src/loss/__pycache__/
+src/utils/__pycache__/
+scripts/__pycache__/
+configs/
+logs/
+checkpoints/
+results/
+notebooks/
+experiments/
+
 # 忽略 HRTF可视化 目录下的数据文件和生成的图片
 HRTF可视化/*.txt
 HRTF可视化/*.pdf
@@ -33,3 +47,12 @@ HRTF可视化/*.png
 # 忽略tensorboard日志文件
 *.0
 AE_related/ideas.md
+
+# 保留原始目录（逐步迁移后删除）
+AE_related/
+AE_related_Sonicom/
+NewVAECode/
+NewANPCode/
+NewANPCode3D/
+NewCNNCode/
+NewCNNcode3D/
