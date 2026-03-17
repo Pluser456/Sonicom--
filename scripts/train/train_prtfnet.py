@@ -3,8 +3,8 @@ import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from PRTFNet import PRTFNet
-from new_dataset import HRTFDataSet
-from utils import split_dataset, train_one_epoch_2d, evaluate
+from src.dataset.hrtf import HRTFDataSet
+from src.utils.data import split_dataset, train_one_epoch_2d, evaluate
 from torch.utils.tensorboard import SummaryWriter
 import time
 import numpy as np

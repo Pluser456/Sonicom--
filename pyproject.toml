@@ -1,0 +1,12 @@
+[project]
+name = "sonicom"
+version = "0.1.0"
+description = "HRTF Prediction using Deep Learning"
+requires-python = ">=3.8"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools]
+package-dir = {"" = "."}

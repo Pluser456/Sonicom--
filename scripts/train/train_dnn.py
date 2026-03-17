@@ -6,11 +6,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from new_dataset import SonicomDataSet,SonicomDataSetDNN
+from src.dataset.hrtf import SonicomDataSet,SonicomDataSetDNN
 from dnn_cfg import DNNCfg
 from vae_incept_cfg import InceptionVAECfg as VAECfg  
 from cvae_dense_cfg import CVAECfg 
-from utils import split_dataset, train_one_epoch
+from src.utils.data import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm

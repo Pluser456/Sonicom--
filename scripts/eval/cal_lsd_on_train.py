@@ -2,14 +2,14 @@ import numpy as np
 import h5py
 import torch
 from torchvision import transforms
-from utils import *
-from TestNet import TestNet as create_model
+from src.utils.data import *
+from src.models.TestNet import TestNet as create_model
 import matplotlib.pyplot as plt
 import os
 from torchvision import transforms
-from new_dataset import SonicomDataSet, SingleSubjectDataSet
+from src.dataset.hrtf import SonicomDataSet, SingleSubjectDataSet
 
-# from utils import read_split_data, train_one_epoch, evaluate
+# from src.utils.data import read_split_data, train_one_epoch, evaluate
 
 model_path = "CNNweights\model-45.pth"
 batch_size = 1

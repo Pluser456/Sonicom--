@@ -1,10 +1,10 @@
 import os
 import torch
 from torch.utils.data import DataLoader
-from TestNet import ResNet3D as threeDResnet
-from TestNet import ResNet2D as twoDResnet
-from new_dataset import SonicomDataSet, SingleSubjectDataSet
-from utils import split_dataset
+from src.models.TestNet import ResNet3D as threeDResnet
+from src.models.TestNet import ResNet2D as twoDResnet
+from src.dataset.hrtf import SonicomDataSet, SingleSubjectDataSet
+from src.utils.data import split_dataset
 import numpy as np
 from new_cal_LSD import evaluate_one_hrtf
 

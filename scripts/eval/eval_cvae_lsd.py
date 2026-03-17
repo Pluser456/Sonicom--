@@ -12,8 +12,8 @@ from torchvision.transforms import Compose, ToTensor, Grayscale, Resize
 from vae_incept_cfg import InceptionVAECfg as VAECfg
 from dnn_cfg import DNNCfg
 from cvae_dense_cfg import CVAECfg
-from new_dataset import SonicomDataSetLSD
-from utils import split_dataset, train_one_epoch
+from src.dataset.hrtf import SonicomDataSetLSD
+from src.utils.data import split_dataset, train_one_epoch
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from tqdm import tqdm

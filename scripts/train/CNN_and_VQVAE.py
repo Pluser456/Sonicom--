@@ -2,15 +2,15 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from TestNet import ResNet3DClassifier as threeDResnet
-from TestNet import ResNet2DClassifier as twoDResnet
-from new_dataset import SonicomDataSet, OnlyHRTFDataSet
-from utils import split_dataset, train_one_epoch, evaluate
+from src.models.TestNet import ResNet3DClassifier as threeDResnet
+from src.models.TestNet import ResNet2DClassifier as twoDResnet
+from src.dataset.hrtf import SonicomDataSet, OnlyHRTFDataSet
+from src.utils.data import split_dataset, train_one_epoch, evaluate
 from tqdm import tqdm
 import sys
 from torch.utils.tensorboard import SummaryWriter
-from AE import HRTF_VQVAE
-from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
+from src.models.AE import HRTF_VQVAE
+from src.models.AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
     embed_dim, num_codebook_embeddings, use_VQ, input_pos_as_seq, \
         tolerance_for_calc_threshold, decay
 import time

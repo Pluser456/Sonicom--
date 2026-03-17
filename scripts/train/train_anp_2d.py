@@ -5,9 +5,9 @@ import torch.optim as optim
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from TestNet import TestNet
-from new_dataset import SonicomDataSet
-from utils import split_dataset, train_one_epoch, evaluate
+from src.models.TestNet import TestNet
+from src.dataset.hrtf import SonicomDataSet
+from src.utils.data import split_dataset, train_one_epoch, evaluate
 
 def main():
     # 设备配置

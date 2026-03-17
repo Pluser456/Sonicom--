@@ -4,12 +4,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter # <--- 添加导入
+from torch.utils.tensorboard import SummaryWriter
 import tqdm
 import sys
-from AE import HRTFAutoencoder
-from new_dataset import OnlyHRTFDataSet
-from utils import split_dataset
+
+# Run from project root: PYTHONPATH=. python scripts/train/Train_AE.py
+from src.models.AE import HRTFAutoencoder
+from src.dataset.hrtf import OnlyHRTFDataSet
+from src.utils.data import split_dataset
 from transformers import get_cosine_schedule_with_warmup
 from matplotlib import pyplot as plt
 import numpy as np
@@ -64,7 +66,7 @@ test_loader = DataLoader(
 )
 
 # --- 模型实例化和优化器 ---
-from AEconfig import pos_dim_for_each_row,\
+from src.models.AEconfig import pos_dim_for_each_row, \
       num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num
 
 

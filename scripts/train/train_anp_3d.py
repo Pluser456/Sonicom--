@@ -2,11 +2,11 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from TestNet import TestNet as threeDResnetANP
-from TestNet import ResNet3D as threeDResnet
-from TestNet import ResNet2D as twoDResnet
-from new_dataset import SonicomDataSet
-from utils import split_dataset, train_one_epoch, evaluate
+from src.models.TestNet import TestNet as threeDResnetANP
+from src.models.TestNet import ResNet3D as threeDResnet
+from src.models.TestNet import ResNet2D as twoDResnet
+from src.dataset.hrtf import SonicomDataSet
+from src.utils.data import split_dataset, train_one_epoch, evaluate
 from torch.utils.tensorboard import SummaryWriter
 import time
 import numpy as np

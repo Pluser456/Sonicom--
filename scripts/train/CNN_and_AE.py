@@ -2,16 +2,16 @@ import os
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from TestNet import TestNet as threeDResnetANP
-from TestNet import ResNet3D as threeDResnet
-from TestNet import ResNet2D as twoDResnet
-from new_dataset import SonicomDataSet, OnlyHRTFDataSet
-from utils import split_dataset, train_one_epoch, evaluate
+from src.models.TestNet import TestNet as threeDResnetANP
+from src.models.TestNet import ResNet3D as threeDResnet
+from src.models.TestNet import ResNet2D as twoDResnet
+from src.dataset.hrtf import SonicomDataSet, OnlyHRTFDataSet
+from src.utils.data import split_dataset, train_one_epoch, evaluate
 from tqdm import tqdm
 import sys
 from torch.utils.tensorboard import SummaryWriter
-from AE import HRTFAutoencoder
-from AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers
+from src.models.AE import HRTFAutoencoder
+from src.models.AEconfig import latent_dim, pos_dim_for_each_row, num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers
 
 def main():
     # 设备配置

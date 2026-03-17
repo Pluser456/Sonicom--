@@ -2,12 +2,12 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from new_dataset import SonicomDataSet, SingleSubjectDataSet
-from utils import split_dataset
+from src.dataset.hrtf import SonicomDataSet, SingleSubjectDataSet
+from src.utils.data import split_dataset
 import numpy as np
 import matplotlib.pyplot as plt
-from AE import HRTF_VQVAE
-from AEconfig import pos_dim_for_each_row, \
+from src.models.AE import HRTF_VQVAE
+from src.models.AEconfig import pos_dim_for_each_row, \
     num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
     num_codebook_embeddings, commitment_cost_beta, num_quantizers
 

@@ -1,11 +1,10 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset
-from utils import calculate_hrtf_mean
+from ..utils import calculate_hrtf_mean
 from PIL import Image
 from torchvision import transforms
 import h5py
-import random
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""

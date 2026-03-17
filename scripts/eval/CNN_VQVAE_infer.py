@@ -2,14 +2,14 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from TestNet import ResNet3DClassifier as threeDResnet
-from TestNet import ResNet2DClassifier as twoDResnet
-from new_dataset import SonicomDataSet
-from utils import split_dataset
+from src.models.TestNet import ResNet3DClassifier as threeDResnet
+from src.models.TestNet import ResNet2DClassifier as twoDResnet
+from src.dataset.hrtf import SonicomDataSet
+from src.utils.data import split_dataset
 from tqdm import tqdm
 
-from AE import HRTF_VQVAE
-from AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
+from src.models.AE import HRTF_VQVAE
+from src.models.AEconfig import transformer_encoder_settings, transformer_decoder_settings, encoder_out_vec_num, \
     hrtf_row_len, num_codebook_embeddings, commitment_cost_beta, embed_dim, use_VQ, input_pos_as_seq, \
         tolerance_for_calc_threshold, decay
 

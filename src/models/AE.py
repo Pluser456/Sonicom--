@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
-from vector_quantize_pytorch import SimVQ, VectorQuantize, FSQ,GroupedResidualVQ, ResidualVQ
-from ema_vq import VectorQuantization
+
+from .ema_vq import VectorQuantization
 # --- Rotary Positional Encoding ---
 pass
     
@@ -160,14 +159,6 @@ class HRTF_VQVAE(nn.Module):
             dropout=encoder_transformer_config["dropout"],
             feature_num=self.encoder_out_vec_num, # 编码器输出此长度的序列 (例如 108)
         )
-
-        # self.vq_layer = VectorQuantize(dim = hrtf_row_len, codebook_size=num_embeddings,
-        #                             kmeans_init = True,   # set to True
-        #                             kmeans_iters = 10,     # number of kmeans iterations to calculate the centroids for the codebook on init
-        #                             # threshold_ema_dead_code=2,
-        #                             # use_cosine_sim=True, # 使用余弦相似度
-        #                             commitment_weight = commitment_cost, # commitment cost
-        #                             )
 
         self.vq_layer = nn.ModuleList([ VectorQuantization(
             dim=embed_dim, # Transformer的嵌入维度

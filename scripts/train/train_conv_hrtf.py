@@ -6,9 +6,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from new_dataset import SonicomDataSet,SonicomDataSetConvHRTF
+from src.dataset.hrtf import SonicomDataSet,SonicomDataSetConvHRTF
 from vae_conv_cfg import VAECfg  
-from utils import split_dataset, train_one_epoch
+from src.utils.data import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm

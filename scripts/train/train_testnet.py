@@ -5,9 +5,9 @@ import torch
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from new_dataset import SonicomDataSet
-from TestNet import TestNet as create_model
-from utils import split_dataset, train_one_epoch, evaluate
+from src.dataset.hrtf import SonicomDataSet
+from src.models.TestNet import TestNet as create_model
+from src.utils.data import split_dataset, train_one_epoch, evaluate
 
 
 def main(args):
