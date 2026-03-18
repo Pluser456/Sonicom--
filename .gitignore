@@ -36,9 +36,12 @@ data/
 notebooks/.ipynb_checkpoints/
 
 # 配置文件（敏感）
-*.yaml
-!configs/*.yaml.example
-configs/
+
+# configs 目录下的 yaml 文件（除 default.yaml）
+configs/**/*.yaml
+configs/**/*.json
+configs/**/*.py
+!configs/default.yaml
 
 # 图像和结果
 results/**/*.png
@@ -49,9 +52,6 @@ results/**/*.txt
 *.tmp
 *.log
 .DS_Store
-
-# 保留的示例文件
-!configs/*.yaml.example
 
 # 特殊代码目录
 src/models/vector-quantize-pytorch-master

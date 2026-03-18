@@ -1,0 +1,60 @@
+# VQVAE 训练配置
+
+# 数据集配置
+dataset:
+  name: "widespread"
+  ear_dir: "ear_image"
+  hrtf_dir: "hrtf"
+  input_form: "image"
+  use_diff: false
+  mode: "right"
+  n_folds: 5
+  val_fold: 0
+
+# 模型配置 (来自 AEconfig.py)
+model:
+  name: "VQVAE"
+  codebook_size: 6
+  embed_dim: 192
+  pos_dim_for_each_row: 8
+  num_hrtf_rows: 2562
+  hrtf_row_len: 90
+  current_encoder_type: "transformer"
+  encoder_out_vec_num: 12
+  encoder_layers: 4
+  decoder_layers: 10
+  dropout: 0.0
+  use_VQ: true
+  input_pos_as_seq: false
+  # Transformer 编码器配置
+  transformer_encoder_settings:
+    num_heads: 6
+    num_encoder_layers: 4
+    dim_feedforward: 512
+    dropout: 0.0
+  # Transformer 解码器配置
+  transformer_decoder_settings:
+    num_heads: 6
+    num_decoder_layers: 10
+    dim_feedforward: 512
+    dropout: 0.0
+  # VQ-VAE 特定参数
+  commitment_cost_beta: 0.25
+  tolerance_for_calc_threshold: 330
+  decay: 0.99
+
+# 训练配置 (来自 Train_VQVAE.py)
+training:
+  batch_size: 5
+  epochs: 60
+  learning_rate: 0.0002
+  weight_decay: 0.00001 # 1e-5
+  num_warmup_epochs: 6
+  device: "cuda"
+  log: on
+
+# 路径配置
+paths:
+  data_dir: "./data"
+  log_dir: "./logs/tensorboard/vqvae/vqvae-sub"
+  checkpoint_dir: "./checkpoints/vqvae/vqvae-sub"

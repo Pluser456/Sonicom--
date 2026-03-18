@@ -165,7 +165,8 @@ def main():
         print(f"Load model from {modelpath}")
 
     # 创建实验文件夹并保存配置
-    experiment_id, writer = create_experiment(log_dir, config)
+    if config.training.log == True:
+        experiment_id, writer = create_experiment(log_dir, config)
 
     # 训练循环
     for epoch in range(start_epoch, num_epochs):

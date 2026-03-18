@@ -33,6 +33,7 @@ class TrainingConfig:
     epochs: int
     learning_rate: float
     device: str
+    log: bool
 
 
 @dataclass
