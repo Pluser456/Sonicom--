@@ -16,7 +16,9 @@ class DatasetConfig:
     input_form: str
     use_diff: bool
     mode: str
-
+    n_folds: int
+    val_fold: int
+    seed: int = 42
 
 @dataclass
 class ModelConfig:

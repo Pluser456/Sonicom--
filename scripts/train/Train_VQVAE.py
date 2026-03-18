@@ -93,7 +93,9 @@ def main():
     modelpath = f"{weightdir}/{args.weightname}"
 
     # 加载数据集
-    dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=config.dataset.input_form)
+    dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=config.dataset.input_form, 
+                                  n_folds=config.dataset.n_folds, val_fold=config.dataset.val_fold, 
+                                  seed=config.dataset.seed)
 
     train_dataset = OnlyHRTFDataSet(
         dataset_paths["train_hrtf_list"],
@@ -236,7 +238,7 @@ def main():
 
         avg_recon_loss_val = val_loss_recon / len(test_loader)
         avg_vq_loss_val = val_loss_vq / len(test_loader)
-        activity_val = torch.unique(torch.cat(indexes_list, dim=1)).numel() / config.model.codebook_size * 100
+        activity_val = torch.unique(torch.cat(indexes_list, dim=0)).numel() / config.model.codebook_size * 100
 
         writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
         writer.add_scalar("val_loss_vq", avg_vq_loss_val, epoch)
