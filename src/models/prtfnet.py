@@ -18,22 +18,36 @@ def conv3x3(
         bias=False,
     )
 
-class BasicBlock(nn.Module):
+class Bottleneck(nn.Module):
+    # Bottleneck in torchvision places the stride for downsampling at 3x3 convolution(self.conv2)
+    # while original implementation places the stride at the first 1x1 convolution(self.conv1)
+    # according to "Deep residual learning for image recognition" https://arxiv.org/abs/1512.03385.
+    # This variant is also known as ResNet V1.5 and improves accuracy according to
+    # https://ngc.nvidia.com/catalog/model-scripts/nvidia:resnet_50_v1_5_for_pytorch.
+
+    expansion: int = 4
+
     def __init__(
         self,
-        inchannels: int,
-        outchannels: int,
+        inplanes: int,
+        planes: int,
         stride: int = 1,
-        downsample=None
+        downsample=None,
+        groups: int = 1,
+        base_width: int = 64,
     ) -> None:
         super().__init__()
+        
         norm_layer = nn.BatchNorm2d
-        # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inchannels, outchannels, stride)
-        self.bn1 = norm_layer(outchannels)
+        width = int(planes * (base_width / 64.0)) * groups
+        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
+        self.conv1 = conv1x1(inplanes, width)
+        self.bn1 = norm_layer(width)
+        self.conv2 = conv3x3(width, width, stride, groups)
+        self.bn2 = norm_layer(width)
+        self.conv3 = conv1x1(width, planes * self.expansion)
+        self.bn3 = norm_layer(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = conv3x3(outchannels, outchannels)
-        self.bn2 = norm_layer(outchannels)
         self.downsample = downsample
         self.stride = stride
 
@@ -46,6 +60,10 @@ class BasicBlock(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -57,15 +75,9 @@ class BasicBlock(nn.Module):
 
 class PRTFNet(nn.Module):
     """论文PRTFNet的复现"""
-    def __init__(self):
+    def __init__(self, pos_num, freq_num):
         super(PRTFNet, self).__init__()
-        self.one_hot_fc = nn.Sequential(
-            nn.Linear(2562, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256)
-        )
+        self.one_hot_fc = nn.Linear(pos_num, 256)
         self.conv1 = nn.Conv2d(
             1, 64, kernel_size=7, stride=2, padding=(3,2), bias=False
         )
@@ -74,12 +86,12 @@ class PRTFNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.inchannels = 64
         layers = [3, 4, 6, 3]
-        self.layer1 = self.make_layer(BasicBlock, 256, layers[0])
-        self.layer2 = self.make_layer(BasicBlock, 512, layers[1], stride=2)
-        self.layer3 = self.make_layer(BasicBlock, 1024, layers[2], stride=2)
-        self.layer4 = self.make_layer(BasicBlock, 2048, layers[3])
+        self.layer1 = self.make_layer(Bottleneck, 64, layers[0])       # 输出 256
+        self.layer2 = self.make_layer(Bottleneck, 128, layers[1], stride=2) # 输出 512
+        self.layer3 = self.make_layer(Bottleneck, 256, layers[2], stride=2) # 输出 1024
+        self.layer4 = self.make_layer(Bottleneck, 512, layers[3], stride=1) # 输出 2048
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(2048, 90)
+        self.fc = nn.Linear(2048, freq_num)
 
     def forward(self, voxel, one_hot, device):
         voxel = voxel.to(device)
@@ -106,31 +118,27 @@ class PRTFNet(nn.Module):
         x = x.reshape(shape[0], shape[1], x.shape[-1]) # [batch, small_batch_num, 90]
         return x
 
-    def make_layer(self, block, outchannels: int, blocks: int, stride: int = 1) -> nn.Sequential:
+    def make_layer(self, block, planes: int, blocks: int, stride: int = 1) -> nn.Sequential:
         downsample = None
-
-        if self.inchannels != outchannels:
+        
+        if stride != 1 or self.inchannels != planes * block.expansion:
             downsample = nn.Sequential(
-                conv1x1(self.inchannels, outchannels, stride),
-                nn.BatchNorm2d(outchannels),
+                conv1x1(self.inchannels, planes * block.expansion, stride),
+                nn.BatchNorm2d(planes * block.expansion),
             )
-
         layers = []
-        layers.append(
-            block(
-                self.inchannels,
-                outchannels,
-                stride,
-                downsample,
-            )
-        )
-        self.inchannels = outchannels
+        layers.append(block(self.inchannels, planes, stride, downsample))
+        
+        self.inchannels = planes * block.expansion
+        
         for _ in range(1, blocks):
-            layers.append(
-                block(
-                    self.inchannels,
-                    outchannels,
-                )
-            )
-
+            layers.append(block(self.inchannels, planes))
         return nn.Sequential(*layers)
+
+if __name__ == "__main__":
+    model = PRTFNet(pos_num=504, freq_num=39)  # 使用正确的维度
+    dummy_img = torch.randn(1, 1, 256, 256)    # Batch=1, 1 通道，256x256
+    dummy_dir = torch.randn(1, 16, 504)        # Batch=1, 16 个方向，504 维的 one-hot 编码
+    output = model(dummy_img, dummy_dir, device='cpu')
+    print(f"输出形状：{output.shape}") 
+    # 预期：torch.Size([1, 16, 39]) (取决于 small_batch_num)

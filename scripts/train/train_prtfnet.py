@@ -103,7 +103,7 @@ def main():
     )
 
     # 模型实例化
-    model = PRTFNet().to(device)
+    model = PRTFNet(pos_num=config.dataset.pos_num, freq_num=config.dataset.freq_num).to(device)
 
     # 计算总参数量
     print(f"{'Layer Name':<60} | {'Parameters':>15}")
@@ -124,8 +124,9 @@ def main():
 
     # 优化器和调度器
     optimizer = optim.AdamW(model.parameters(), lr=config.training.learning_rate, weight_decay=config.training.weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.training.epochs, eta_min=config.training.learning_rate * 0.01)
     num_epochs = config.training.epochs
+    total_steps = num_epochs * len(train_loader)  # 总训练步数
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=config.training.learning_rate * 0.01)
     loss_function = nn.MSELoss()
 
     # 加载已有权重（可选）
@@ -142,6 +143,11 @@ def main():
     if config.training.log == True:
         experiment_id, writer = create_experiment(log_dir, config, start_epoch)
 
+    # 训练相关参数
+    update_interval = config.training.scheduler_update_interval  # 每 462 步更新一次 scheduler
+    global_step = start_epoch * len(train_loader)  # 全局步数，用于 writer 记录
+    loss_window = []  # 用于记录最近 462 步的 loss
+
     for epoch in range(start_epoch, num_epochs):
         train_dataset.on_epoch_end()
         test_dataset.on_epoch_end()
@@ -149,6 +155,7 @@ def main():
         # ===== 训练 =====
         model.train()
         accu_loss = torch.zeros(1).to(device)
+
         optimizer.zero_grad()
 
         train_progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [train]", file=sys.stdout)
@@ -158,19 +165,45 @@ def main():
             hrtf = sample_batch["hrtf"].to(device)
             right_voxel = sample_batch["right_voxel"]
 
+            optimizer.zero_grad()
+
             mu = model(right_voxel, one_hot, device=device)
             loss = loss_function(mu, hrtf)
 
             loss.backward()
             accu_loss += loss.detach()
+            loss_window.append(loss.detach().item())
+            optimizer.step()
+            scheduler.step()
 
+            # 保持窗口大小为 update_interval
+            if len(loss_window) > update_interval:
+                loss_window.pop(0)
+
+            # 计算最近 462 步的平均 loss
+            avg_loss = sum(loss_window) / len(loss_window)
             train_progress_bar.desc = (
-                f"[train epoch {epoch+1}] loss: {accu_loss.item()/(step+1):.3f}"
+                f"[train epoch {epoch+1}] loss: {avg_loss:.3f} "
+                f"lr: {optimizer.param_groups[0]['lr']:.4e}"
             )
 
-            optimizer.step()
-            optimizer.zero_grad()
+            # 每 update_interval 步进行日志记录
+            if (global_step + step + 1) % update_interval == 0:
+                if config.training.log == True:
+                    writer.add_scalar("Loss/train_step", avg_loss, global_step + step + 1)
+                    writer.add_scalar("lr", optimizer.param_groups[0]['lr'], global_step + step + 1)
 
+        # 处理剩余步数（不足 462 步的部分）
+        if (global_step + step + 1) % update_interval != 0:
+            avg_loss = sum(loss_window) / update_interval
+            if config.training.log == True:
+                writer.add_scalar("Loss/train_step", avg_loss, global_step + step + 1)
+                writer.add_scalar("lr", optimizer.param_groups[0]['lr'], global_step + step + 1)
+
+        # 更新全局步数
+        global_step += len(train_loader)
+
+        # 计算整个 epoch 的平均 loss（用于记录）
         loss = accu_loss.item() / len(train_loader)
 
         # ===== 验证 =====
@@ -195,11 +228,9 @@ def main():
         val_loss = accu_val_loss.item() / len(test_loader)
 
         if config.training.log == True:
-            writer.add_scalar("Loss/train", loss, epoch)
+            writer.add_scalar("Loss/train_epoch", loss, epoch)
             writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
 
-        scheduler.step()
         print("\n")
 
         # 每个 epoch 保存一次模型权重
