@@ -1,10 +1,65 @@
 """
 训练和评估工具函数
 """
+import yaml
+from pathlib import Path
+from torch.utils.tensorboard import SummaryWriter
 import sys
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+
+def create_experiment(log_dir: str, config, start_epoch: int) -> tuple:
+    """
+    创建或继续实验文件夹并保存配置
+
+    Args:
+        log_dir: 日志根目录
+        config: 配置对象，若包含 training.continue_exp 字段且不为 None，则继续该实验
+        start_epoch: 起始 epoch，用于断点续训时设置 tensorboard 的 purge_step
+
+    Returns:
+        (exp_folder, writer): 实验文件夹路径、TensorBoard writer
+    """
+    log_path = Path(log_dir)
+    purge_step = start_epoch
+
+    if hasattr(config.training, 'continue_exp') and config.training.continue_exp is not None:
+        exp_folder = log_path / config.training.continue_exp
+        if not exp_folder.exists():
+            raise ValueError(f"Experiment folder {exp_folder} does not exist.")
+        print(f"Continuing experiment from {exp_folder}")
+        next_num = int(config.training.continue_exp.split('_')[1])
+
+        print(f"Will purge steps >= {purge_step}")
+        # 创建 SummaryWriter，传入 purge_step
+        writer = SummaryWriter(log_dir=str(exp_folder), purge_step=purge_step)
+    else:
+        log_path.mkdir(parents=True, exist_ok=True)
+
+        # 找到下一个可用的 exp_xxx 文件夹
+        existing_dirs = [d for d in log_path.iterdir() if d.is_dir() and d.name.startswith('exp_')]
+        exp_numbers = []
+        for d in existing_dirs:
+            try:
+                exp_numbers.append(int(d.name.split('_')[1]))
+            except (IndexError, ValueError):
+                pass
+        next_num = max(exp_numbers) + 1 if exp_numbers else 0
+        exp_folder = log_path / f"exp_{next_num:03d}"
+
+    writer = SummaryWriter(log_dir=str(exp_folder))
+    # 保存当前配置到实验文件夹
+    config_path = exp_folder / "config.yaml"
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump({
+            'dataset': config.dataset.__dict__,
+            'model': config.model.__dict__,
+            'training': config.training.__dict__,
+            'paths': config.paths.__dict__
+        }, f, allow_unicode=True, default_flow_style=False)
+
+    return next_num, writer
 
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch):

@@ -104,7 +104,6 @@ class PRTFNet(nn.Module):
         x = torch.flatten(x, 1) # [batch*small_batch_num, 2048]
         x = self.fc(x) # [batch*small_batch_num, 90]
         x = x.reshape(shape[0], shape[1], x.shape[-1]) # [batch, small_batch_num, 90]
-        del one_hot, voxel, voxel_repeated, convinput
         return x
 
     def make_layer(self, block, outchannels: int, blocks: int, stride: int = 1) -> nn.Sequential:

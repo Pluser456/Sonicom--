@@ -1,38 +1,110 @@
+"""
+PRTFNet 训练脚本 - 支持配置文件
+用法:
+    python Train_prtfnet.py --config configs/default.yaml
+"""
 import os
+import argparse
+import sys
+from pathlib import Path
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from PRTFNet import PRTFNet
-from src.dataset.hrtf import HRTFDataSet
-from src.utils.data import split_dataset, train_one_epoch_2d, evaluate
-from torch.utils.tensorboard import SummaryWriter
-import time
-import numpy as np
-import matplotlib.pyplot as plt
+from tqdm import tqdm
+
+from src.models.prtfnet import PRTFNet
+from src.dataset.prtf import HRTFDataSet
+from src.utils.data import split_dataset
+from src.utils.config import load_config, get_default_config
+from src.utils.training import create_experiment
+
+
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='PRTFNet Training')
+    parser.add_argument('--config', type=str, default='configs/default.yaml',
+                        help='Path to config file')
+    parser.add_argument('--weightname', type=str, default='nopretrain',
+                        help='Weight file name')
+    return parser.parse_args()
+
 
 def main():
-    # 设备配置
-    current_model = "2D" # 选择 "2D" 或 "3D"
-    # weightname = "best_model.pth"
-    weightname = "nopretrain"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    usediff = False  # 是否使用差值HRTF数据
-    pos_num_per_batch = 6  # 每个batch中包含的位置数量，建议设置为2562的约数，2562=2*3*7*61
+    args = parse_args()
 
-    if current_model == "3D":
-        weightdir = "PRTFNet/Wi_3D"
-        ear_dir = "Ear_voxel_Wi"
-        if os.path.exists(weightdir) is False:
-            os.makedirs(weightdir)
-        # model = threeDResnet().to(device)
-        inputform = "voxel"
-    elif current_model == "2D":
-        weightdir = "PRTFNet/Wi_2D"
-        ear_dir = "Ear_image_gray_Wi"
-        if os.path.exists(weightdir) is False:
-            os.makedirs(weightdir)
-        model = PRTFNet().to(device)
-        inputform = "image"
+    # 加载配置
+    if os.path.exists(args.config):
+        config = load_config(args.config)
+    else:
+        print(f"Config file {args.config} not found, using defaults")
+        config = get_default_config()
+
+    # 设置设备和路径
+    device = torch.device(config.training.device)
+    weightdir = config.paths.checkpoint_dir
+    ear_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.ear_dir)
+    hrtf_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.hrtf_dir)
+    log_dir = config.paths.log_dir
+
+    if not os.path.exists(weightdir):
+        os.makedirs(weightdir)
+
+    modelpath = f"{weightdir}/{args.weightname}"
+
+    # 数据分割
+    dataset_paths = split_dataset(
+        ear_dir, hrtf_dir,
+        inputform=config.dataset.input_form,
+        n_folds=config.dataset.n_folds,
+        val_fold=config.dataset.val_fold,
+        seed=config.dataset.seed
+    )
+
+    # 创建数据集
+    train_dataset = HRTFDataSet(
+        dataset_paths["train_hrtf_list"],
+        dataset_paths["left_train"],
+        dataset_paths["right_train"],
+        use_diff=config.dataset.use_diff,
+        calc_mean=config.dataset.use_diff,
+        inputform=config.dataset.input_form,
+        mode=config.dataset.mode,
+        pos_num_per_batch=config.dataset.pos_num_per_batch
+    )
+
+    test_dataset = HRTFDataSet(
+        dataset_paths["test_hrtf_list"],
+        dataset_paths["left_test"],
+        dataset_paths["right_test"],
+        calc_mean=False,
+        status="test",
+        inputform=config.dataset.input_form,
+        mode=config.dataset.mode,
+        use_diff=config.dataset.use_diff,
+        provided_mean_left=train_dataset.log_mean_hrtf_left,
+        provided_mean_right=train_dataset.log_mean_hrtf_right,
+        pos_num_per_batch=config.dataset.pos_num_per_batch
+    )
+
+    # 创建数据加载器
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=1,
+        shuffle=True,
+        collate_fn=train_dataset.collate_fn
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=1,
+        shuffle=False,
+        collate_fn=test_dataset.collate_fn
+    )
+
+    # 模型实例化
+    model = PRTFNet().to(device)
+
     # 计算总参数量
     print(f"{'Layer Name':<60} | {'Parameters':>15}")
     print("-" * 80)
@@ -41,8 +113,8 @@ def main():
     for name, parameter in model.named_parameters():
         if not parameter.requires_grad:
             continue
-        
-        params = parameter.numel() # 获取参数的数量
+
+        params = parameter.numel()
         print(f"{name:<60} | {params:>15,}")
         total_params += params
 
@@ -50,94 +122,98 @@ def main():
     print(f"{'Total Trainable Params':<60} | {total_params:>15,}")
     print(f"Total Trainable Params (M): {total_params / 1e6:.2f}M")
 
-    modelpath = f"{weightdir}/{weightname}"
+    # 优化器和调度器
+    optimizer = optim.AdamW(model.parameters(), lr=config.training.learning_rate, weight_decay=config.training.weight_decay)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.training.epochs, eta_min=config.training.learning_rate * 0.01)
+    num_epochs = config.training.epochs
+    loss_function = nn.MSELoss()
+
+    # 加载已有权重（可选）
+    start_epoch = 0
     if os.path.exists(modelpath):
-        print("Load model from", modelpath)
-        model.load_state_dict(torch.load(modelpath, map_location=device, weights_only=True))
-    
-    # 数据分割
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
+        checkpoint = torch.load(modelpath, map_location=device, weights_only=False)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint.get('epoch', 0) + 1
+        print(f"Load model from {modelpath}")
 
-    # 创建数据集
-    train_dataset = HRTFDataSet(
-        dataset_paths["train_hrtf_list"],
-        dataset_paths["left_train"],
-        dataset_paths["right_train"],
-        use_diff=usediff,
-        calc_mean=usediff,
-        inputform=inputform,
-        mode="right",
-        pos_num_per_batch=pos_num_per_batch
-    )
-    
-    test_dataset = HRTFDataSet(
-        dataset_paths["test_hrtf_list"],
-        dataset_paths["left_test"],
-        dataset_paths["right_test"],
-        calc_mean=False,
-        status="test",
-        inputform=inputform,
-        mode="right",
-        use_diff=usediff,
-        provided_mean_left=train_dataset.log_mean_hrtf_left,
-        provided_mean_right=train_dataset.log_mean_hrtf_right,
-        pos_num_per_batch=pos_num_per_batch
-    )
-    # 创建数据加载器
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=1, # 请固定此batch_size为1，或调整上面的pos_num_per_batch
-        shuffle=True,
-        collate_fn=train_dataset.collate_fn
-    )
-    
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=1, # 请固定此batch_size为1，或调整上面的pos_num_per_batch
-        shuffle=False,
-        collate_fn=test_dataset.collate_fn
-    )
-    optimizer = optim.Adam(model.parameters(), lr=2e-4, weight_decay=1e-5)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
-    writer = SummaryWriter(log_dir=f"{weightdir}/test_{time.strftime('%m-%d_%H-%M')}")
-    # 训练循环
-    num_epochs = 20
-    best_loss = 300
-    
-    patience = 5  # 早停的容忍次数
-    patience_counter = 0
+    # 创建实验文件夹并保存配置
+    if config.training.log == True:
+        experiment_id, writer = create_experiment(log_dir, config, start_epoch)
 
-    for epoch in range(0, num_epochs + 1):
-        train_dataset.on_epoch_end() # 打乱训练集的数据顺序
-        test_dataset.on_epoch_end() # 打乱测试集的数据顺序
+    for epoch in range(start_epoch, num_epochs):
+        train_dataset.on_epoch_end()
+        test_dataset.on_epoch_end()
 
-        # 训练
-        loss = train_one_epoch_2d(model, optimizer, train_loader, device, epoch)
+        # ===== 训练 =====
+        model.train()
+        accu_loss = torch.zeros(1).to(device)
+        optimizer.zero_grad()
 
-        # 验证
-        val_loss = evaluate(model, test_loader, device, epoch)
-        writer.add_scalar("Loss/train", loss, epoch)
-        writer.add_scalar("Loss/val", val_loss, epoch)
+        train_progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs} [train]", file=sys.stdout)
+
+        for step, sample_batch in enumerate(train_progress_bar):
+            one_hot = sample_batch["one_hot"].type(torch.float32)
+            hrtf = sample_batch["hrtf"].to(device)
+            right_voxel = sample_batch["right_voxel"]
+
+            mu = model(right_voxel, one_hot, device=device)
+            loss = loss_function(mu, hrtf)
+
+            loss.backward()
+            accu_loss += loss.detach()
+
+            train_progress_bar.desc = (
+                f"[train epoch {epoch+1}] loss: {accu_loss.item()/(step+1):.3f}"
+            )
+
+            optimizer.step()
+            optimizer.zero_grad()
+
+        loss = accu_loss.item() / len(train_loader)
+
+        # ===== 验证 =====
+        model.eval()
+        accu_val_loss = torch.zeros(1).to(device)
+
+        with torch.no_grad():
+            val_progress_bar = tqdm(test_loader, desc=f"Epoch {epoch+1}/{num_epochs} [valid]", file=sys.stdout)
+            for step, sample_batch in enumerate(val_progress_bar):
+                one_hot = sample_batch["one_hot"].type(torch.float32)
+                hrtf = sample_batch["hrtf"].to(device)
+                right_voxel = sample_batch["right_voxel"]
+
+                mu = model(right_voxel, one_hot, device=device)
+                val_loss = loss_function(mu, hrtf)
+
+                accu_val_loss += val_loss.detach()
+                val_progress_bar.desc = (
+                    f"[valid epoch {epoch+1}] loss: {accu_val_loss.item()/(step+1):.3f}"
+                )
+
+        val_loss = accu_val_loss.item() / len(test_loader)
+
+        if config.training.log == True:
+            writer.add_scalar("Loss/train", loss, epoch)
+            writer.add_scalar("Loss/val", val_loss, epoch)
+            writer.add_scalar("lr", optimizer.param_groups[0]['lr'], epoch)
+
         scheduler.step()
-        writer.add_scalar("Learning Rate", scheduler.get_last_lr()[0], epoch)
-        # 检查是否是最佳模型
-        if val_loss < best_loss:
-            best_loss = val_loss
-            patience_counter = 0  # 重置早停计数器
-            torch.save(model.state_dict(), f"{weightdir}/best_model.pth")
-            print(f"Saved best model with validation loss: {best_loss:.4f}")
-        else:
-            patience_counter += 1
+        print("\n")
 
-        # 检查早停条件
-        if patience_counter >= patience:
-            print(f"Early stopping triggered after {epoch} epochs with best validation loss: {best_loss:.4f}")
-            break
+        # 每个 epoch 保存一次模型权重
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict()
+        }
+        torch.save(checkpoint, f"{weightdir}/exp_{experiment_id:03d}_epoch_{epoch+1}.pt")
+        print(f"Checkpoint saved at epoch {epoch+1}")
+        
+    print("Training finished.")
 
-        # 保存当前模型
-        # if epoch % 50 == 0:
-        #     torch.save(model.state_dict(), f"{weightdir}/model-{epoch}.pth")
-        #     print(f"Saved model at epoch {epoch}")
 
 if __name__ == "__main__":
     main()
