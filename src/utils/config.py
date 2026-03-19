@@ -33,7 +33,8 @@ class TrainingConfig:
     epochs: int
     learning_rate: float
     device: str
-    log: bool
+    log: bool = True
+    continue_exp: str = None  # 继续的实验文件夹，如 "exp_001"
 
 
 @dataclass
