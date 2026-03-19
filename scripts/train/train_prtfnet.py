@@ -129,15 +129,20 @@ def main():
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=config.training.learning_rate * 0.01)
     loss_function = nn.MSELoss()
 
-    # 加载已有权重（可选）
+    # 加载已有权重
     start_epoch = 0
-    if os.path.exists(modelpath):
-        checkpoint = torch.load(modelpath, map_location=device, weights_only=False)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        start_epoch = checkpoint.get('epoch', 0) + 1
-        print(f"Load model from {modelpath}")
+    if config.training.continue_exp is not None:
+        if os.path.exists(modelpath):
+            checkpoint = torch.load(modelpath, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Load model from {modelpath}")
+        else:
+            raise FileNotFoundError(f"Checkpoint {modelpath} not found for continuation")
+    else:
+        print("Checkpoint provided but continue_exp is None, starting fresh training")
 
     # 创建实验文件夹并保存配置
     if config.training.log == True:
