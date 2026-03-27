@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from src.dataset.hrtf import SonicomDataSet,SonicomDataSetLeft
-from vae_incept_cfg import InceptionVAECfg as VAECfg  
+from src.models.cvae.vae_incept_cfg import InceptionVAECfg as VAECfg  
 from src.utils.data import split_dataset, train_one_epoch
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
