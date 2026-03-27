@@ -4,7 +4,13 @@ import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 from argparse import ArgumentParser
 from torch import nn
-from utils import figure_to_tensor, get_freqresp_plot
+
+# 尝试导入 utils 函数（CVAECfg 需要，单独使用 CVAE 不需要）
+try:
+    from utils import figure_to_tensor, get_freqresp_plot
+except ImportError:
+    figure_to_tensor = None
+    get_freqresp_plot = None
 
 
 class CVAE(nn.Module):
@@ -147,21 +153,22 @@ class CVAECfg(pl.LightningModule):
             'test_loss': loss
         }
         self.log_dict(logs)
-        # log reconstructions
-        resp_true, resp_pred = resp_true.cpu(), resp_pred.cpu()
-        labels = {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in labels.items()}
-        labels = pd.DataFrame(labels)
-        fig = self.get_freqresp_figure(resp_true, resp_pred, labels, n_cols=8, wh_ratio=2, width=20)
-        img = figure_to_tensor(fig)
-        self.logger.experiment.add_image(f'test/resp_freq_{batch_idx:04}', img, self.current_epoch)
+        # log reconstructions (需要 utils 函数)
+        if figure_to_tensor is not None and get_freqresp_plot is not None:
+            resp_true, resp_pred = resp_true.cpu(), resp_pred.cpu()
+            labels = {k: v.cpu() if isinstance(v, torch.Tensor) else v for k, v in labels.items()}
+            labels = pd.DataFrame(labels)
+            fig = self.get_freqresp_figure(resp_true, resp_pred, labels, n_cols=8, wh_ratio=2, width=20)
+            img = figure_to_tensor(fig)
+            self.logger.experiment.add_image(f'test/resp_freq_{batch_idx:04}', img, self.current_epoch)
 
     def training_epoch_end(self, outputs):
         # log gradients
         if self.current_epoch % self.grad_freq == 0:
             for name, params in self.named_parameters():
                 self.logger.experiment.add_histogram(name, params, self.current_epoch)
-        # log figures
-        if self.current_epoch % self.fig_freq == 0:
+        # log figures (需要 utils 函数)
+        if self.current_epoch % self.fig_freq == 0 and figure_to_tensor is not None:
             # run prediction
             resp_true, c = self.example_input_array
             resp_true, c = resp_true.to(self.device), c.to(self.device)

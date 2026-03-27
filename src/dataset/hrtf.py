@@ -1,10 +1,12 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+from tqdm import tqdm
+import h5py
+
 from ..utils import calculate_hrtf_mean
 from PIL import Image
 from torchvision import transforms
-import h5py
 
 class SonicomDataSet(Dataset):
     """使用预计算特征的数据集"""
@@ -47,13 +49,13 @@ class SonicomDataSet(Dataset):
         # 设置 transforms
         self.image_transform_train = transforms.Compose([
             # transforms.RandomHorizontalFlip(),
+            transforms.Resize((256, 256)),
             transforms.RandomRotation(15),
-            # transforms.ColorJitter(brightness=0.3, contrast=0.3),
-            # transforms.RandomGrayscale(p=0.1),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5], std=[0.5])
         ])
         self.image_transform_test = transforms.Compose([
+            transforms.Resize((256, 256)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5], std=[0.5])
         ])
@@ -142,7 +144,72 @@ class SonicomDataSet(Dataset):
             "right_voxel": right_voxels,
             "feature": features
         }
-    
+
+class CVAEDataSet(SonicomDataSet):
+    """
+    专用于 CVAE 训练的数据集
+    每个样本返回单个位置的 HRTF 数据和对应的方位角标签
+    预加载所有数据到内存以提高加载速度
+    """
+    def __init__(self, hrtf_files,
+                 status="train",
+                 calc_mean=True, use_diff=True,
+                 mode="left", provided_mean_left=None, provided_mean_right=None):
+        super().__init__(
+            hrtf_files=hrtf_files,
+            left_voxels=None,
+            right_voxels=None,
+            status=status,
+            calc_mean=calc_mean,
+            use_diff=use_diff,
+            mode=mode,
+            provided_mean_left=provided_mean_left,
+            provided_mean_right=provided_mean_right,
+        )
+        # 计算总位置数
+        self.total_positions = self.positions_per_subject * len(self.hrtf_files)
+
+        # 预加载所有数据到内存
+        print(f"预加载 CVAEDataSet 数据到内存 ({self.total_positions} 个位置)...")
+        self.hrtf_data = []
+        self.theta_data = []
+        for hrtf_file in tqdm(self.hrtf_files, desc="加载 HRTF 数据"):
+            with h5py.File(hrtf_file, 'r') as data:
+                # 预加载 HRTF（复用父类逻辑，但加载全部数据）
+                hrtf = self._get_hrtf(data, np.arange(self.positions_per_subject))
+                self.hrtf_data.append(hrtf)  # [positions, nfft]
+
+                # 预加载 theta（直接转为 torch.tensor）
+                self.theta_data.append(torch.tensor(data["theta"][:].T, dtype=torch.float32))  # [positions, 2]
+
+    def __len__(self):
+        return self.total_positions
+
+    def __getitem__(self, idx):
+        # 计算受试者索引和位置索引
+        subject_idx = idx // self.positions_per_subject
+        position_idx = idx % self.positions_per_subject
+
+        # 从预加载的内存中获取数据
+        hrtf = self.hrtf_data[subject_idx][position_idx]
+        position = self.theta_data[subject_idx][position_idx]  # [2]: [az, el]
+
+        return {
+            "hrtf": hrtf,
+            "position": position,
+        }
+
+    @staticmethod
+    def collate_fn(batch):
+        """自定义批处理函数"""
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        positions = torch.stack([item["position"] for item in batch])
+        return {
+            "hrtf": hrtfs,
+            "position": positions,  # shape: [batch, 2]
+        }
+
+
 class OnlyHRTFDataSet(SonicomDataSet):
     '''仅输出HRTF和方位角的数据集'''
     def __init__(self, hrtf_files, 

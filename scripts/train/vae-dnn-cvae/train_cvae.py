@@ -1,148 +1,256 @@
+"""
+CVAE 训练脚本 - 支持配置文件
+用法:
+    python train_cvae.py --config configs/vae-dnn-cvae/cvae_default.yaml
+"""
 import os
 import argparse
-import json
+from pathlib import Path
 import torch
+import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms
-from src.dataset.hrtf import SonicomDataSet,SonicomDataSetHRTF
-from cvae_dense_cfg import CVAECfg 
-from src.utils.data import split_dataset, train_one_epoch
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
-from tqdm import tqdm
+import tqdm
 import sys
-import pandas as pd
 
-def main(args):
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
-    os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-    # 创建保存目录
-    #os.makedirs("./CVAEweights", exist_ok=True)
-    tb_writer = SummaryWriter()
+from src.utils.config import load_config, get_default_config
+from src.dataset.hrtf import CVAEDataSet
+from src.utils.data import split_dataset
+from src.models.cvae.dense import CVAE
+from src.utils.training import create_experiment
 
-    # 加载配置文件（参考ear_to_prtf的逻辑）
-    with open(args.cfg_path, 'r') as f:
-        cfg = json.load(f)
 
-    model = CVAECfg(
-        nfft=cfg['hrtf']['nfft'],
-        cfg={
-            'labels': cfg['hrtf']['labels'],
-            'encoder_layer_sizes': cfg['hrtf']['encoder_layer_sizes'],
-            'decoder_layer_sizes': cfg['hrtf']['decoder_layer_sizes'],
-            'latent_size': cfg['hrtf']['latent_size'],
-        }
-    ).to(device)
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='CVAE Training')
+    parser.add_argument('--config', type=str, default='configs/vae-dnn-cvae/cvae_default.yaml',
+                        help='Path to config file')
+    parser.add_argument('--weightname', type=str, default='nopretrain',
+                        help='Weight file name')
+    return parser.parse_args()
 
-    cvae_path= r"weights_ws/version_7/checkpoints/epoch=2-step=76247.ckpt"
-    cvae_checkpoint = torch.load(cvae_path, map_location=device)
-    cvae_state_dict = cvae_checkpoint['state_dict']
-    model.load_state_dict(cvae_state_dict)
-    model = model.to(device)
 
-    #print(f"Labels type: {type(cfg['hrtf']['labels'])}, Labels: {cfg['hrtf']['labels']}")
-    # print(model.cvae)
-    # print()
+def loss_function(hrtf_true, hrtf_pred, means, log_var):
+    """
+    CVAE 损失函数
+    Args:
+        hrtf_true: 真实 HRTF 频响 [batch_size, nfft]
+        hrtf_pred: 重构 HRTF 频响 [batch_size, nfft]
+        means: 潜在空间均值 [batch_size, latent_size]
+        log_var: 潜在空间对数方差 [batch_size, latent_size]
+    Returns:
+        mse: 重构损失
+        kld: KL 散度
+        loss: 总损失
+    """
+    mse = nn.functional.mse_loss(hrtf_pred, hrtf_true, reduction='sum') / hrtf_true.size(0)
+    kld = -0.5 * torch.sum(1 + log_var - means.pow(2) - log_var.exp()) / hrtf_true.size(0)
+    loss = mse + kld
+    return mse, kld, loss
 
-    # 数据集准备（保持原有逻辑）
-    image_dir = "Ear_image_gray_Wi"
-    hrtf_dir = "FFT_HRTF_Wi"
-    dataset_paths = split_dataset(image_dir, hrtf_dir)
-    
-    # 数据转换（保持通道数一致）
-    data_transform = transforms.Compose([
-        transforms.Resize(cfg['ears']['img_size']),
-        transforms.ToTensor(),
-        transforms.Grayscale(cfg['ears']['img_channels']),
-        transforms.Normalize([0.5], [0.5])
-    ])
+
+def main():
+    args = parse_args()
+
+    # 加载配置
+    if os.path.exists(args.config):
+        config = load_config(args.config)
+    else:
+        print(f"Config file {args.config} not found, using defaults")
+        config = get_default_config()
+
+    # 设置设备和路径
+    device = torch.device(config.training.device)
+    weightdir = config.paths.checkpoint_dir
+    ear_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.ear_dir)
+    hrtf_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.hrtf_dir)
+    log_dir = config.paths.log_dir
+
+    if not os.path.exists(weightdir):
+        os.makedirs(weightdir)
+
+    modelpath = f"{weightdir}/{args.weightname}"
+
+    # 加载数据集
+    dataset_paths = split_dataset(ear_dir, hrtf_dir, inputform=config.dataset.input_form,
+                                  n_folds=config.dataset.n_folds, val_fold=config.dataset.val_fold,
+                                  seed=config.dataset.seed)
 
     # 创建数据集
-    train_dataset = SonicomDataSetHRTF(
+    train_dataset = CVAEDataSet(
         dataset_paths["train_hrtf_list"],
-        dataset_paths["left_train"],
-        dataset_paths["right_train"],
-        transform=data_transform,
-        calc_mean=True,
-        status="cvae",
-        mode="left"
+        use_diff=config.dataset.use_diff,
+        calc_mean=config.dataset.use_diff,
+        status="train",
+        mode=config.dataset.mode
     )
-    
-    test_dataset = SonicomDataSetHRTF(
+    test_dataset = CVAEDataSet(
         dataset_paths["test_hrtf_list"],
-        dataset_paths["left_test"],
-        dataset_paths["right_test"],
-        transform=data_transform,
+        use_diff=config.dataset.use_diff,
         calc_mean=False,
-        status="cvae",
-        mode="left",
+        status="test",
+        mode=config.dataset.mode,
         provided_mean_left=train_dataset.log_mean_hrtf_left,
         provided_mean_right=train_dataset.log_mean_hrtf_right
     )
 
+    # 创建数据加载器
     train_loader = DataLoader(
         train_dataset,
-        batch_size=50,
+        batch_size=config.training.batch_size,
         shuffle=True,
         collate_fn=train_dataset.collate_fn
     )
-    batch_train_test = next(iter(train_loader))
-    print(batch_train_test["hrtf"].shape)
-    #shape:hrtf[50,108]
-    
     test_loader = DataLoader(
         test_dataset,
-        batch_size=10,
+        batch_size=config.training.batch_size,
         shuffle=False,
         collate_fn=test_dataset.collate_fn
     )
-  
-    batch_example = next(iter(test_loader))#pos[10,3],hrtf(left)[10,108]
-    resp_true = batch_example["hrtf"]
-    c = torch.cat([batch_example[lbl].unsqueeze(-1) for lbl in model.c_labels], dim=-1).float()
-    model.example_input_array = (resp_true, c)
-    labels_dict = {lbl: batch_example[lbl].cpu().numpy() for lbl in model.c_labels}
-    model.example_input_labels = pd.DataFrame(labels_dict)
-    
 
+    # 构建完整的网络层结构（与 CVAECfg 逻辑一致）
+    nfft = config.model.nfft
+    encoder_layer_sizes = [nfft] + config.model.encoder_layer_sizes  # [nfft, ...中间层]
+    decoder_layer_sizes = config.model.decoder_layer_sizes + [nfft]  # [...中间层, nfft]
+    print(f"Encoder layers: {encoder_layer_sizes}")
+    print(f"Decoder layers: {decoder_layer_sizes}")
 
-    # 训练循环
-    num_epochs = 480*5
-    '''
-    optimizers, lr_schedulers = model.configure_optimizers()
-    optimizer = optimizers[0]
-    lr_scheduler = lr_schedulers[0]
+    # 模型实例化
+    model = CVAE(
+        encoder_layer_sizes=encoder_layer_sizes,
+        latent_size=config.model.latent_size,
+        decoder_layer_sizes=decoder_layer_sizes,
+        num_labels=config.model.num_labels
+    ).to(device)
 
-    
-    for epoch in range(0, num_epochs):
-        # 训练
-        train_one_epoch(model, optimizer, train_loader, device, epoch)
-        model.training_epoch_end()
-    '''    
-    # 初始化 logger
-    logger = TensorBoardLogger("tb_logs", name="cvae_ws_6.19_model")
+    print(f"Total parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 
-    trainer = Trainer(
-        max_epochs=num_epochs,
-        logger=logger,
-        #gpus=1,
-        #accelerator='gpu',
-        val_check_interval=1.0,  # 确保验证只在每个 epoch 结束后进行
+    # 优化器和调度器
+    optimizer = optim.Adam(model.parameters(), lr=config.training.learning_rate)
+    num_epochs = config.training.epochs
+
+    # 使用 ReduceLROnPlateau 调度器
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=config.training.scheduler_factor,
+        patience=config.training.scheduler_patience,
+        cooldown=config.training.scheduler_cooldown
     )
 
-    # 开始训练
-    trainer.fit(model, train_loader,test_loader)
-        
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    # 新增配置文件参数
-    parser.add_argument('--cfg-path', type=str, help='Path to model config file',default= 'NewVAECode/configs/edges_widespread.json')
-    parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--batch-size', type=int, default=8)
-    parser.add_argument('--model-name', default='vae_conv', help='Output model name')
-    parser.add_argument('--device', default='cuda:0', help='Device id')
-    
-    opt = parser.parse_args()
-    main(opt)
+    # 加载已有权重
+    start_epoch = 0
+    if config.training.continue_exp is not None:
+        if os.path.exists(modelpath):
+            checkpoint = torch.load(modelpath, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 'scheduler_state_dict' in checkpoint:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            print(f"Load model from {modelpath}")
+        else:
+            raise FileNotFoundError(f"Checkpoint {modelpath} not found for continuation")
+
+    # 创建实验文件夹并保存配置
+    writer = None
+    if config.training.log:
+        experiment_id, writer = create_experiment(log_dir, config, start_epoch)
+
+    # 训练循环
+    for epoch in range(start_epoch, num_epochs):
+        model.train()
+        epoch_loss_recon = 0
+        epoch_loss_kl = 0
+
+        train_progress_bar = tqdm.tqdm(
+            train_loader,
+            desc=f"Epoch {epoch+1}/{num_epochs}",
+            file=sys.stdout
+        )
+
+        for i, batch in enumerate(train_progress_bar):
+            # 获取 HRTF 数据和条件标签
+            hrtf_true = batch["hrtf"].to(device)
+            condition = batch["position"].float().to(device)  # [batch, 2]: [az, el]
+
+            optimizer.zero_grad()
+
+            # 模型前向
+            hrtf_pred, mu, logvar, z = model(hrtf_true, condition)
+            recon_loss, kl_loss, total_loss = loss_function(hrtf_true, hrtf_pred, mu, logvar)
+
+            total_loss.backward()
+            optimizer.step()
+
+            epoch_loss_recon += recon_loss.item()
+            epoch_loss_kl += kl_loss.item()
+
+            current_lr = optimizer.param_groups[0]['lr']
+            train_progress_bar.set_description(
+                f"[train epoch {epoch+1}] loss_recon: {epoch_loss_recon/(i+1):.4f} "
+                f"loss_kl: {epoch_loss_kl/(i+1):.4f} "
+                f"lr: {current_lr:.2e}"
+            )
+
+        avg_recon_loss_train = epoch_loss_recon / len(train_loader)
+        avg_kl_loss_train = epoch_loss_kl / len(train_loader)
+
+        if writer is not None:
+            writer.add_scalar("train_loss_recon", avg_recon_loss_train, epoch)
+            writer.add_scalar("train_loss_kl", avg_kl_loss_train, epoch)
+            writer.add_scalar("train_loss_total", avg_recon_loss_train + avg_kl_loss_train, epoch)
+            writer.add_scalar("lr", current_lr, epoch)
+
+        # 验证
+        model.eval()
+        val_loss_recon = 0
+        val_loss_kl = 0
+
+        with torch.no_grad():
+            val_progress_bar = tqdm.tqdm(test_loader, file=sys.stdout)
+            for step, batch in enumerate(val_progress_bar):
+                hrtf_val = batch["hrtf"].to(device)
+                condition_val = batch["position"].float().to(device)  # [batch, 2]: [az, el]
+
+                hrtf_pred_val, mu_val, logvar_val, _ = model(hrtf_val, condition_val)
+                recon_loss_val, kl_loss_val, _ = loss_function(hrtf_val, hrtf_pred_val, mu_val, logvar_val)
+
+                val_loss_recon += recon_loss_val.item()
+                val_loss_kl += kl_loss_val.item()
+
+                val_progress_bar.desc = (
+                    f"[valid epoch {epoch+1}] loss_recon: {val_loss_recon/(step+1):.4f} "
+                    f"loss_kl: {val_loss_kl/(step+1):.4f}"
+                )
+
+        avg_recon_loss_val = val_loss_recon / len(test_loader)
+        avg_kl_loss_val = val_loss_kl / len(test_loader)
+
+        if writer is not None:
+            writer.add_scalar("val_loss_recon", avg_recon_loss_val, epoch)
+            writer.add_scalar("val_loss_kl", avg_kl_loss_val, epoch)
+            writer.add_scalar("val_loss_total", avg_recon_loss_val + avg_kl_loss_val, epoch)
+
+        # 更新学习率
+        scheduler.step(avg_recon_loss_train + avg_kl_loss_train)
+
+        print("")
+
+        # 保存模型
+        if (epoch + 1) % config.training.save_interval == 0:
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict() if hasattr(scheduler, 'state_dict') else None
+            }
+            torch.save(checkpoint, f"{weightdir}/exp_{experiment_id:03d}_epoch_{epoch+1}.pt")
+            print(f"Checkpoint saved at epoch {epoch+1}")
+
+    if writer is not None:
+        writer.close()
+    print("Training finished.")
+
+
+if __name__ == "__main__":
+    main()
