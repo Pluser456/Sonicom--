@@ -16,7 +16,7 @@ import sys
 from src.utils.config import load_config, get_default_config
 from src.dataset.hrtf import SonicomDataSet
 from src.utils.data import split_dataset
-from src.models.cvae.vae import VAE
+from src.models.hybrid.vae import VAE
 from src.utils.training import create_experiment
 
 
