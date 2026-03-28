@@ -4,7 +4,16 @@
 import yaml
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from types import SimpleNamespace
 
+
+def dict_to_namespace(d):
+    """将嵌套字典转换为支持链式访问的对象"""
+    if d is None:
+        return None
+    if isinstance(d, dict):
+        return SimpleNamespace(**{k: dict_to_namespace(v) for k, v in d.items()})
+    return d
 
 
 @dataclass
@@ -98,15 +107,15 @@ def load_config(config_path: str) -> Config:
         paths=PathsConfig(**paths_base)
     )
 
-    # 动态添加额外字段
+    # 动态添加额外字段（嵌套字典转换为可访问对象）
     for key, value in dataset_extra.items():
-        setattr(config.dataset, key, value)
+        setattr(config.dataset, key, dict_to_namespace(value))
     for key, value in model_extra.items():
-        setattr(config.model, key, value)
+        setattr(config.model, key, dict_to_namespace(value))
     for key, value in training_extra.items():
-        setattr(config.training, key, value)
+        setattr(config.training, key, dict_to_namespace(value))
     for key, value in paths_extra.items():
-        setattr(config.paths, key, value)
+        setattr(config.paths, key, dict_to_namespace(value))
 
     return config
 
