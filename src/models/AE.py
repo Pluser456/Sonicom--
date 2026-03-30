@@ -153,10 +153,10 @@ class HRTF_VQVAE(nn.Module):
         self.encoder = HrtfTransformerEncoder(
             hrtf_row_len=self.hrtf_row_len,
             embed_dim=embed_dim,
-            num_heads=encoder_transformer_config["num_heads"],
-            num_layers=encoder_transformer_config["num_encoder_layers"],
-            dim_feedforward=encoder_transformer_config["dim_feedforward"],
-            dropout=encoder_transformer_config["dropout"],
+            num_heads=encoder_transformer_config.num_heads,
+            num_layers=encoder_transformer_config.num_encoder_layers,
+            dim_feedforward=encoder_transformer_config.dim_feedforward,
+            dropout=encoder_transformer_config.dropout,
             feature_num=self.encoder_out_vec_num, # 编码器输出此长度的序列 (例如 108)
         )
 
@@ -171,10 +171,10 @@ class HRTF_VQVAE(nn.Module):
 
         self.decoder = HrtfTransformerDecoder(
             embed_dim=embed_dim,
-            nhead=decoder_transformer_config["num_heads"],
-            num_decoder_layers=decoder_transformer_config["num_decoder_layers"],
-            dim_feedforward=decoder_transformer_config["dim_feedforward"],
-            dropout=decoder_transformer_config["dropout"],
+            nhead=decoder_transformer_config.num_heads,
+            num_decoder_layers=decoder_transformer_config.num_decoder_layers,
+            dim_feedforward=decoder_transformer_config.dim_feedforward,
+            dropout=decoder_transformer_config.dropout,
             hrtf_row_len=self.hrtf_row_len,
             input_pos_as_seq=input_pos_as_seq # 将位置作为序列输入
         )

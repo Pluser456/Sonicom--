@@ -1,13 +1,9 @@
-from re import T
 import torch
 from torch import nn
-from ResNet3D import resnet34_3d
-from ResNet3D import resnet18_3d
-from ResNet import resnet34
-from ResNet import resnet18
-import numpy as np
-import torch.nn.functional as F
-
+from .ResNet3D import resnet34_3d
+from .ResNet3D import resnet18_3d
+from .ResNet import resnet34
+from .ResNet import resnet18
 
 class FeatureExtractor(nn.Module):
     """图像特征提取网络"""
