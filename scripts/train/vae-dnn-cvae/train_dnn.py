@@ -14,7 +14,7 @@ import tqdm
 import sys
 
 from src.utils.config import load_config, get_default_config
-from src.dataset.hrtf import DNNDataSet
+from src.dataset.hybrid import DNNDataSet
 from src.utils.data import split_dataset
 from src.models.hybrid.dnn import DNN
 from src.utils.training import create_experiment

@@ -15,7 +15,7 @@ import sys
 from transformers import get_cosine_schedule_with_warmup
 
 from src.utils.config import load_config, get_default_config
-from src.dataset.hrtf import OnlyHRTFDataSet
+from src.dataset.vqvae import OnlyHRTFDataSet
 from src.utils.data import split_dataset
 from src.models.AE import HRTF_VQVAE
 from src.utils.training import create_experiment

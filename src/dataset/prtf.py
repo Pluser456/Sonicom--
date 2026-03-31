@@ -1,65 +1,30 @@
 import torch
 import numpy as np
-from torch.utils.data import Dataset
-from ..utils import calculate_hrtf_mean
-from PIL import Image
-from torchvision import transforms
 import h5py
 import torch.nn.functional as F
+from .hrtf import SonicomDataSet
 
-class HRTFDataSet(Dataset):
-    """使用预计算特征的数据集"""
+
+class HRTFDataSet(SonicomDataSet):
+    """使用预计算特征的数据集，继承自SonicomDataSet"""
     def __init__(self, hrtf_files, left_voxels, right_voxels, 
                  status="train",
                  calc_mean=True, use_diff=True, inputform="voxel",
                  mode="both", provided_mean_left=None, provided_mean_right=None, pos_num_per_batch=7):
-        """
-        Args:
-            hrtf_files (list): HRTF文件路径列表
-            left_voxels (list): 左耳体素路径列表
-            right_voxels (list): 右耳体素路径列表
-            device (str): 设备类型 - "cpu"/"cuda"
-            status (str): 输出数据集模式 - "train"/"test"
-            calc_mean (bool): 是否计算HRTF均值
-            mode (str): 输出模式 - "left"/"right"/"both"
-            provided_mean_left/provided_mean_right: 预计算的HRTF均值（如果calc_mean=False）
-            pos_num_per_batch: 每个batch中包含的位置数量，最好是 2*3*7*61=2562 的约数
-        """
-        self.hrtf_files = hrtf_files
-        self.left_voxel_paths = left_voxels
-        self.right_voxel_paths = right_voxels
-        self.status = status
-        self.mode = mode
-        self.inputform = inputform
-        self.use_diff = use_diff
+        super().__init__(
+            hrtf_files=hrtf_files,
+            left_voxels=left_voxels,
+            right_voxels=right_voxels,
+            status=status,
+            calc_mean=calc_mean,
+            use_diff=use_diff,
+            inputform=inputform,
+            mode=mode,
+            provided_mean_left=provided_mean_left,
+            provided_mean_right=provided_mean_right,
+        )
         self.pos_num_per_batch = pos_num_per_batch
         self.shuffled_indices = {}
-
-        # HRTF 均值
-        if calc_mean:
-            self.log_mean_hrtf_left = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='left'))
-            self.log_mean_hrtf_right = 20 * np.log10(calculate_hrtf_mean(self.hrtf_files, whichear='right'))
-        else:
-            self.log_mean_hrtf_left = provided_mean_left
-            self.log_mean_hrtf_right = provided_mean_right
-
-        # 获取每个样本的方位数
-        with h5py.File(self.hrtf_files[0], 'r') as f:
-            self.positions_per_subject = f["F_left"].shape[0]
-
-        # 设置 transforms
-        self.image_transform_train = transforms.Compose([
-            # transforms.RandomHorizontalFlip(),
-            transforms.Resize((256, 256)),
-            transforms.RandomRotation(15),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
-        self.image_transform_test = transforms.Compose([
-            transforms.Resize((256, 256)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5], std=[0.5])
-        ])
 
     def __len__(self):
         self.max_batch_num_per_file = self.positions_per_subject // self.pos_num_per_batch \
@@ -93,41 +58,6 @@ class HRTFDataSet(Dataset):
             "right_voxel": right_voxel
         }
 
-    def _get_hrtf(self, data, position_idx):
-        if self.mode == "left":
-            hrtf_data = data["F_left"][:, :][position_idx, :]
-            mean_hrtf = self.log_mean_hrtf_left[position_idx, :] if self.use_diff else 0
-            return torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
-        elif self.mode == "right":
-            hrtf_data = data["F_right"][:, :][position_idx, :]
-            mean_hrtf = self.log_mean_hrtf_right[position_idx, :] if self.use_diff else 0
-            return torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
-
-    def _load_data(self, path, is_right=False):
-        if self.inputform == "image":
-            image = Image.open(path).convert('L')
-            if is_right:
-                image = image.transpose(Image.FLIP_LEFT_RIGHT)
-            transform = self.image_transform_train if self.status == "train" else self.image_transform_test
-            return transform(image)
-        else:
-            voxel = np.load(path)
-            if is_right:
-                voxel = np.flip(voxel, axis=1).copy()
-
-            # if self.status == "train":
-            #     # 数据增强：翻转、旋转、加噪声
-            #     if random.random() < 0.5:
-            #         voxel = np.flip(voxel, axis=0).copy()
-            #     if random.random() < 0.5:
-            #         voxel = np.flip(voxel, axis=2).copy()
-            #     k = random.randint(0, 3)
-            #     voxel = np.rot90(voxel, k, axes=(0, 1)).copy()
-            #     # if random.random() < 0.3:
-            #     #     voxel += np.random.normal(0, 0.02, voxel.shape)
-            #     #     voxel = np.clip(voxel, 0, 1)
-            return torch.tensor(voxel, dtype=torch.float32).unsqueeze(0)
-        
     def on_epoch_end(self):
         """在每个epoch开始时调用，为每个文件生成随机不重复的索引序列"""
         if self.status == "train":

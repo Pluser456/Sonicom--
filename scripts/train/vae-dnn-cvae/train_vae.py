@@ -14,7 +14,7 @@ import tqdm
 import sys
 
 from src.utils.config import load_config, get_default_config
-from src.dataset.hrtf import SonicomDataSet
+from src.dataset.hybrid import VAEDataSet
 from src.utils.data import split_dataset
 from src.models.hybrid.vae import VAE
 from src.utils.training import create_experiment
@@ -109,7 +109,7 @@ def main():
                                   seed=config.dataset.seed)
 
     # 创建数据集 - SonicomDataSet 支持图像输入
-    train_dataset = SonicomDataSet(
+    train_dataset = VAEDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
@@ -119,7 +119,7 @@ def main():
         status="train",
         mode=config.dataset.mode
     )
-    test_dataset = SonicomDataSet(
+    test_dataset = VAEDataSet(
         dataset_paths["test_hrtf_list"],
         dataset_paths["left_test"],
         dataset_paths["right_test"],

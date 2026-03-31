@@ -17,7 +17,7 @@ import tqdm
 import sys
 
 from src.utils.config import load_config, get_default_config
-from src.dataset.hrtf import CNNDataSet
+from src.dataset.vqvae import CNNDataSet
 from src.utils.data import split_dataset
 from src.models.AE import HRTF_VQVAE
 from src.models.TestNet import ResNet3DClassifier, ResNet2DClassifier
