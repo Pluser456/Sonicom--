@@ -14,7 +14,7 @@ import tqdm
 import sys
 from transformers import get_cosine_schedule_with_warmup
 
-from src.utils.config import load_config, get_default_config
+from src.utils.config import load_config
 from src.dataset.vqvae import OnlyHRTFDataSet
 from src.utils.data import split_dataset
 from src.models.AE import HRTF_VQVAE
@@ -37,8 +37,7 @@ def main():
     if os.path.exists(args.config):
         config = load_config(args.config)
     else:
-        print(f"Config file {args.config} not found, using defaults")
-        config = get_default_config()
+        raise FileNotFoundError(f"Config file {args.config} not found.")
 
     # 设置设备和路径
     device = torch.device(config.training.device)

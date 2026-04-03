@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 import tqdm
 import sys
 
-from src.utils.config import load_config, get_default_config
+from src.utils.config import load_config
 from src.dataset.hybrid import DNNDataSet
 from src.utils.data import split_dataset
 from src.models.hybrid.dnn import DNN
@@ -89,8 +89,7 @@ def main():
     if os.path.exists(args.config):
         config = load_config(args.config)
     else:
-        print(f"Config file {args.config} not found, using defaults")
-        config = get_default_config()
+        raise FileNotFoundError(f"Config file {args.config} not found.")
 
     # 设置设备和路径
     device = torch.device(config.training.device)

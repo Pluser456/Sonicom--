@@ -1,13 +1,14 @@
 """
 训练和评估工具函数
 """
-import yaml
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 import sys
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+from omegaconf import OmegaConf
+
 
 def create_experiment(log_dir: str, config, start_epoch: int) -> tuple:
     """
@@ -15,7 +16,7 @@ def create_experiment(log_dir: str, config, start_epoch: int) -> tuple:
 
     Args:
         log_dir: 日志根目录
-        config: 配置对象，若包含 training.continue_exp 字段且不为 None，则继续该实验
+        config: OmegaConf 配置对象
         start_epoch: 起始 epoch，用于断点续训时设置 tensorboard 的 purge_step
 
     Returns:
@@ -24,12 +25,13 @@ def create_experiment(log_dir: str, config, start_epoch: int) -> tuple:
     log_path = Path(log_dir)
     purge_step = start_epoch
 
-    if hasattr(config.training, 'continue_exp') and config.training.continue_exp is not None:
-        exp_folder = log_path / config.training.continue_exp
+    continue_exp = config.training.continue_exp if hasattr(config.training, 'continue_exp') else None
+    if continue_exp is not None:
+        exp_folder = log_path / continue_exp
         if not exp_folder.exists():
             raise ValueError(f"Experiment folder {exp_folder} does not exist.")
         print(f"Continuing experiment from {exp_folder}")
-        next_num = int(config.training.continue_exp.split('_')[1])
+        next_num = int(continue_exp.split('_')[1])
 
         print(f"Will purge steps >= {purge_step}")
         # 创建 SummaryWriter，传入 purge_step
@@ -52,12 +54,7 @@ def create_experiment(log_dir: str, config, start_epoch: int) -> tuple:
     # 保存当前配置到实验文件夹
     config_path = exp_folder / "config.yaml"
     with open(config_path, 'w', encoding='utf-8') as f:
-        yaml.dump({
-            'dataset': config.dataset.__dict__,
-            'model': config.model.__dict__,
-            'training': config.training.__dict__,
-            'paths': config.paths.__dict__
-        }, f, allow_unicode=True, default_flow_style=False)
+        OmegaConf.save(config, f)
 
     return next_num, writer
 
