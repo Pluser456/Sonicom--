@@ -23,6 +23,7 @@ from src.models.AE import HRTF_VQVAE
 from src.models.TestNet import ResNet3DClassifier, ResNet2DClassifier
 from src.utils.training import create_experiment
 
+from transformers import get_cosine_schedule_with_warmup
 
 def parse_args():
     """解析命令行参数"""
@@ -172,13 +173,13 @@ def main():
     optimizer = optim.AdamW(model.parameters(), lr=config.training.learning_rate, weight_decay=config.training.weight_decay)
     num_epochs = config.training.epochs
 
-    # 使用 ReduceLROnPlateau 调度器
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+    scheduler = get_cosine_schedule_with_warmup(
         optimizer,
-        factor=config.training.scheduler_factor,
-        patience=config.training.scheduler_patience,
-        cooldown=config.training.scheduler_cooldown
+        num_warmup_steps=config.training.num_warmup_epochs,
+        num_training_steps=num_epochs
     )
+
+    criterion = nn.CrossEntropyLoss(label_smoothing=config.training.label_smoothing)
 
     # 加载已有权重
     start_epoch = 0
@@ -225,7 +226,7 @@ def main():
             pred, logits = model(ear, device=device)
 
             # 损失计算 (CrossEntropy)
-            loss = nn.functional.cross_entropy(logits, vq_indices)
+            loss = criterion(logits, vq_indices)
 
             loss.backward()
             optimizer.step()
@@ -259,7 +260,7 @@ def main():
 
                 pred_val, logits_val = model(ear_val, device=device)
 
-                loss_val = nn.functional.cross_entropy(logits_val, vq_indices_val)
+                loss_val = criterion(logits_val, vq_indices_val)
                 acc_val = (pred_val == vq_indices_val).float().mean()
 
                 val_loss += loss_val.item()
@@ -277,7 +278,7 @@ def main():
             writer.add_scalar("val_acc", avg_acc_val, epoch)
 
         # 更新学习率
-        scheduler.step(avg_loss_train)
+        scheduler.step()
 
         print("")
 
