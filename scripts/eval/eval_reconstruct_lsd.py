@@ -1,213 +1,244 @@
+"""
+VQVAE 重建 LSD 评估脚本 - 仅使用 VQVAE 编码-量化-解码计算重建 LSD
+用法:
+    python scripts/eval/eval_reconstruct_lsd.py --config configs/eval/reconstruct-lsd-eval.yaml
+"""
 import os
+import argparse
+from pathlib import Path
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
+import numpy as np
+
+from src.utils.config import load_config, save_config
 from src.dataset.hrtf import SonicomDataSet, SingleSubjectDataSet
 from src.utils.data import split_dataset
-import numpy as np
-import matplotlib.pyplot as plt
 from src.models.AE import HRTF_VQVAE
-from src.models.AEconfig import pos_dim_for_each_row, \
-    num_hrtf_rows, hrtf_row_len, transformer_encoder_settings, decoder_mlp_layers, encoder_out_vec_num, \
-    num_codebook_embeddings, commitment_cost_beta, num_quantizers
 
-booksize = num_codebook_embeddings
-reconstructed_LSD = 0
-for i in [30,60,90,120]:
-    print(f"-----------------cal reconstruct LSD for booksize {booksize}-----------------\n")
-    # 设备配置
-    # current_model = "3DResNet" # ["3DResNetANP", "3DResNet", "2DResNetANP", "2DResNet"]
-    weightname = f"best_model_codebook_size_{num_codebook_embeddings}.pth"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='VQVAE Reconstruct LSD Evaluation')
+    parser.add_argument('--config', type=str, default='configs/eval/reconstruct-lsd-eval.yaml',
+                        help='Path to config file')
+    return parser.parse_args()
 
-    batch_size = 32
-    usediff = False  # 是否使用差分数据
 
-    weightdir = "./CNNweights"
-    ear_dir = "Ear_image_gray_Wi"
-    isANP = False
-    if os.path.exists(weightdir) is False:
-        os.makedirs(weightdir)
-    modelpath = f"{weightdir}/{weightname}"
-    # positions_chosen_num = 793
-    inputform = "image"
+def load_pretrained_vqvae(config):
+    """加载预训练的 VQVAE 模型"""
+    device = torch.device(config.evaluation.device)
 
-    hrtf_encoder = HRTF_VQVAE(
-        hrtf_row_len=hrtf_row_len,
-        hrtf_num_rows=num_hrtf_rows,
-        encoder_out_vec_num=encoder_out_vec_num, # 编码器输出序列长度
-        encoder_transformer_config=transformer_encoder_settings,
-        num_embeddings=num_codebook_embeddings,
-        commitment_cost=commitment_cost_beta,
-        pos_dim_per_row=pos_dim_for_each_row,
-        num_quantizers=num_quantizers
+    # 加载 VQVAE 配置
+    vqvae_config = load_config(config.pretrained.vqvae_config)
+    model_config = vqvae_config.model
+
+    vqvae = HRTF_VQVAE(
+        hrtf_row_len=model_config.hrtf_row_len,
+        encoder_out_vec_num=model_config.encoder_out_vec_num,
+        embed_dim=model_config.embed_dim,
+        encoder_transformer_config=model_config.transformer_encoder_settings,
+        decoder_transformer_config=model_config.transformer_decoder_settings,
+        num_embeddings=model_config.codebook_size,
+        use_VQ=model_config.use_VQ,
+        input_pos_as_seq=model_config.input_pos_as_seq,
+        decay=model_config.decay,
+        tolerance_for_calc_threshold=model_config.tolerance_for_calc_threshold,
     ).to(device)
-    hrtf_encoder.load_state_dict(torch.load(f"HRTFAEweights\diff_False_enc_n_1_enc_num_heads-6_num_encoder_layers-4_num_decoder_layers-15_dim_feedforward-512_dropout-0.05_codebook_size_{booksize}_quan_n_3_{i}.pth", map_location=device, weights_only=True))
-    print("Load hrtf_encoder")
-    def evaluate_one_hrtf(hrtf_encoder, test_loader):
-        hrtf_encoder.eval()
 
-        all_preds = []
-        all_targets = []
-        with torch.no_grad():
-            for batch in test_loader:
-                # 数据迁移到设备
-                targets = batch["hrtf"].to(device) 
-                meanloghrtf = batch["meanlog"].to(device)  # [batch]
-                pos = batch["position"].to(device)
-                # right_picture = batch["right_voxel"].to(device)
-                # pred, _ = model(right_picture, device=device) # [batch_size, 18]
-                # pred = pred.reshape(-1, 3, 3)
-                # pred = pred.permute(1, 0, 2, 3) # [2, batch_size, 3, 3]
-                # pred =torch.randint_like(pred, low=0, high=num_codebook_embeddings) # 随机生成索引以测试
-                # 添加epsilon防止log(0)
-                targets = targets + 1e-8
+    vqvae_ckpt = config.pretrained.vqvae_path
+    if os.path.exists(vqvae_ckpt):
+        checkpoint = torch.load(vqvae_ckpt, map_location=device, weights_only=False)
+        vqvae.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Loaded VQVAE from {vqvae_ckpt}")
+    else:
+        raise FileNotFoundError(f"VQVAE checkpoint not found: {vqvae_ckpt}")
 
-                # 转换到对数域 (dB)
-                log_target = 20 * torch.log10(targets)
-                outputs, _, _ = hrtf_encoder(log_target, pos)  # [batch_size, 90]
-                outputs = outputs.squeeze(1)
-                if usediff:
-                    pred = torch.abs(outputs + meanloghrtf)
-                else:
-                    pred = torch.abs(outputs)
-                log_target = torch.abs(log_target)
-
-                # 将当前batch的结果添加到列表
-                all_preds.append(pred)
-                all_targets.append(log_target)
-
-        # 将所有batch的结果拼接成两个大矩阵
-        final_preds = torch.cat(all_preds, dim=0)  # [total_samples, n_frequencies]
-        final_targets = torch.cat(all_targets, dim=0).to(device)  # [total_samples, n_frequencies]
-
-        return final_preds, final_targets
-
-    res_list = []
-    pred_list = []
-    true_list = []
+    vqvae.eval()
+    return vqvae
 
 
-    hrtf_dir = "FFT_HRTF_Wi"
+def evaluate_one_hrtf(vqvae, test_loader, usediff, device):
+    """通过 VQVAE 编码-量化-解码计算重建 LSD"""
+    vqvae.eval()
 
-    dataset_paths = split_dataset(ear_dir, "FFT_HRTF_Wi",inputform=inputform)
-    # 获取各个数据集
-    right_test = dataset_paths['right_test']
+    all_preds = []
+    all_targets = []
+    with torch.no_grad():
+        for batch in test_loader:
+            targets = batch["hrtf"]
+            pos = batch["position"].to(device)
+
+            # 转换到对数域 (dB)
+            targets = targets + 1e-8
+            log_target = 20 * torch.log10(targets)
+            log_target_on_device = log_target.to(device)
+
+            # VQVAE 重建 (编码-量化-解码)
+            outputs, _, _ = vqvae(log_target_on_device, pos)
+            outputs = outputs.squeeze(1)
+            if usediff:
+                meanloghrtf = batch["meanlog"].to(device)
+                pred = torch.abs(outputs + meanloghrtf)
+            else:
+                pred = torch.abs(outputs)
+            log_target = torch.abs(log_target_on_device)
+
+            all_preds.append(pred.cpu())
+            all_targets.append(log_target.cpu())
+
+    final_preds = torch.cat(all_preds, dim=0)
+    final_targets = torch.cat(all_targets, dim=0)
+
+    return final_preds, final_targets
 
 
-    # 实例化训练数据集
+def main():
+    args = parse_args()
+
+    # 加载配置
+    if not os.path.exists(args.config):
+        raise FileNotFoundError(f"Config file {args.config} not found.")
+    config = load_config(args.config)
+
+    device = torch.device(config.evaluation.device)
+
+    # 加载模型
+    vqvae = load_pretrained_vqvae(config)
+
+    # 数据路径
+    ear_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.ear_dir)
+    hrtf_dir = str(Path(config.paths.data_dir) / config.dataset.name / config.dataset.hrtf_dir)
+
+    dataset_paths = split_dataset(
+        ear_dir, hrtf_dir,
+        inputform=config.dataset.input_form,
+        n_folds=config.dataset.n_folds,
+        val_fold=config.dataset.val_fold,
+        seed=config.dataset.seed
+    )
+
+    # 训练数据集（用于计算 mean）
     train_dataset = SonicomDataSet(
         dataset_paths["train_hrtf_list"],
         dataset_paths["left_train"],
         dataset_paths["right_train"],
-        use_diff=usediff,
+        use_diff=config.dataset.use_diff,
         calc_mean=True,
-        status="test", # 因为这里希望坐标是按顺序输入的
-        inputform=inputform,
-        mode="right"
+        status="test",
+        inputform=config.dataset.input_form,
+        mode=config.dataset.mode
     )
-
-
-    # 实例化验证数据集
     log_mean_hrtf_left = train_dataset.log_mean_hrtf_left
     log_mean_hrtf_right = train_dataset.log_mean_hrtf_right
 
+    usediff = config.dataset.use_diff
 
-    for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
-        val_dataset = SingleSubjectDataSet( dataset_paths["test_hrtf_list"],
-                                            dataset_paths["left_test"],
-                                            dataset_paths["right_test"],
-                                            mode="right",
-                                            train_log_mean_hrtf_left=log_mean_hrtf_left,
-                                            train_log_mean_hrtf_right=log_mean_hrtf_right,
-                                            subject_id=hrtfid,
-                                            inputform=inputform
-                                            )
-        dataloader = DataLoader(val_dataset,
-                                batch_size=batch_size,
-                                shuffle=False,
-                                pin_memory=True,
-                                collate_fn=val_dataset.collate_fn
-                                )
-        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(hrtf_encoder, dataloader)
+    # 逐样本 LSD 计算
+    res_list = []
+    pred_list = []
+    true_list = []
+
+    for hrtfid in range(1, len(dataset_paths["test_hrtf_list"]) + 1):
+        val_dataset = SingleSubjectDataSet(
+            dataset_paths["test_hrtf_list"],
+            dataset_paths["left_test"],
+            dataset_paths["right_test"],
+            mode=config.dataset.mode,
+            train_log_mean_hrtf_left=log_mean_hrtf_left,
+            train_log_mean_hrtf_right=log_mean_hrtf_right,
+            subject_id=hrtfid,
+            inputform=config.dataset.input_form
+        )
+        dataloader = DataLoader(
+            val_dataset,
+            batch_size=config.evaluation.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            collate_fn=val_dataset.collate_fn
+        )
+        pred_log_hrtf, true_log_hrtf = evaluate_one_hrtf(vqvae, dataloader, usediff, device)
+
         pred_list.append(pred_log_hrtf)
         true_list.append(true_log_hrtf)
+
         lsd = torch.sqrt(torch.mean((pred_log_hrtf - true_log_hrtf) ** 2)).item()
         res_list.append(lsd)
-        print(f"LSD of HRTF {hrtfid}:", lsd)
+        print(f"LSD of HRTF {hrtfid}: {lsd}")
 
     print(f"Mean LSD: {np.mean(res_list)}")
-    reconstructed_LSD += np.mean(res_list)
+
     pred_tensor = torch.cat(pred_list, dim=0)
     true_tensor = torch.cat(true_list, dim=0)
 
-    freq_list = np.linspace(0, 89, 90)  # 获取频率列表
-    freq_list = 48000 /256 * freq_list  # 计算频率值
-    # 存储每个频率点的平均LSD
+    # 频率计算
+    if config.dataset.name == "widespread":
+        freq_list = np.linspace(0, 89, 90)
+        freq_list = 48000 / 240 * freq_list
+    elif config.dataset.name == "sonicom":
+        freq_list = np.linspace(0, 107, 108)
+        freq_list = 48000 / 256 * freq_list
+
+    # 逐频率点的 LSD
     avg_lsd_per_freq = np.zeros(len(freq_list))
     for freq_idx in range(len(freq_list)):
-        # 计算平均LSD
         LSDvec = torch.sqrt(torch.mean((pred_tensor[:, :, freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
         avg_lsd_per_freq[freq_idx] = torch.mean(LSDvec).item()
-        # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq[freq_idx]}")
+
+    # ---- 与 mean HRTF 的对比 ----
     print("\n-----------------contrast with mean HRTF-----------------\n")
     res_list_mean = []
-    # 将均值转为tensor
-    log_mean_hrtf_right = torch.tensor(np.abs(log_mean_hrtf_right), dtype=torch.float32).to(device)
-    log_mean_hrtf_right = log_mean_hrtf_right.unsqueeze(0)  # 添加batch维度
+    log_mean_hrtf_right = torch.tensor(np.abs(log_mean_hrtf_right), dtype=torch.float32).cpu()
+    log_mean_hrtf_right = log_mean_hrtf_right.unsqueeze(0)
 
-    for hrtfid in range(1, len(right_test)+1):  # 选择计算第几个HRTF的LSD
-        # 之前已经计算预测HRTF和真实HRTF之间LSD，
-        # 现在计算平均HRTF和真实HRTF之间LSD
-        lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_right - true_tensor[hrtfid-1, :, :]) ** 2)).item()
+    for hrtfid in range(1, len(dataset_paths["test_hrtf_list"]) + 1):
+        lsd_of_mean = torch.sqrt(torch.mean((log_mean_hrtf_right - true_tensor[hrtfid - 1, :, :]) ** 2)).item()
         res_list_mean.append(lsd_of_mean)
-        print(f"LSD between mean HRTF and HRTF {hrtfid}:", lsd_of_mean)
+        print(f"LSD between mean HRTF and HRTF {hrtfid}: {lsd_of_mean}")
 
     print(f"Mean LSD of mean HRTF: {np.mean(res_list_mean)}")
 
     avg_lsd_per_freq_of_mean = np.zeros(len(freq_list))
     for freq_idx in range(len(freq_list)):
-        # 计算平均LSD
-        LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_right[:,:,freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
+        LSDvec = torch.sqrt(torch.mean((log_mean_hrtf_right[:, :, freq_idx] - true_tensor[:, :, freq_idx]) ** 2, dim=1))
         avg_lsd_per_freq_of_mean[freq_idx] = torch.mean(LSDvec).item()
-        # print(f"Avg LSD of freq point {freq_idx}:{avg_lsd_per_freq_of_mean[freq_idx]}")
 
-    # 保存频率数据
-    freq_list = (freq_list + 1) * 200
-    np.savetxt('freq_data1.txt', freq_list, fmt='%.1f', header='Frequency (Hz)')
+    # ---- 创建结果目录 ----
+    dataset_name = config.dataset.name
+    run_name = f"lsd_recon_{dataset_name}"
 
-    # 保存LSD数据
-    np.savetxt('lsd_data1.txt', avg_lsd_per_freq, fmt='%.3f', header='LSD (dB)')
-    np.savetxt('lsd_mean_data.txt', avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD (dB)')
-    
-reconstructed_LSD /= 4
-print(f"Reconstructed LSD for booksize {booksize}: {reconstructed_LSD}")
+    result_base = Path(config.paths.result_dir) / run_name
+    result_base.mkdir(parents=True, exist_ok=True)
+
+    existing_dirs = [d for d in result_base.iterdir() if d.is_dir() and d.name.startswith('res_')]
+    res_numbers = []
+    for d in existing_dirs:
+        try:
+            res_numbers.append(int(d.name.split('_')[1]))
+        except (IndexError, ValueError):
+            pass
+    next_num = max(res_numbers) + 1 if res_numbers else 0
+    result_dir = result_base / f"res_{next_num:03d}"
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    # 保存配置文件副本
+    save_config(config, result_dir / "config.yaml")
+
+    # 保存结果
+    np.savetxt(result_dir / "lsd_per_sample.txt", np.array(res_list), fmt='%.6f', header='LSD per sample (dB)')
+    np.savetxt(result_dir / "lsd_per_sample_mean.txt", np.array(res_list_mean), fmt='%.6f', header='LSD of mean HRTF per sample (dB)')
+    np.savetxt(result_dir / "lsd_per_frequency.txt", avg_lsd_per_freq, fmt='%.3f', header='LSD per frequency (dB)')
+    np.savetxt(result_dir / "lsd_per_frequency_mean.txt", avg_lsd_per_freq_of_mean, fmt='%.3f', header='LSD per frequency of mean HRTF (dB)')
+    np.savetxt(result_dir / "freq_data.txt", freq_list, fmt='%.1f', header='Frequency (Hz)')
+
+    # 保存汇总统计
+    with open(result_dir / "summary.txt", 'w', encoding='utf-8') as f:
+        f.write(f"Mean LSD (reconstructed vs original): {np.mean(res_list):.6f} dB\n")
+        f.write(f"Mean LSD (mean HRTF vs original): {np.mean(res_list_mean):.6f} dB\n")
+        f.write(f"Number of samples: {len(res_list)}\n")
+        f.write(f"Number of frequency bins: {len(freq_list)}\n")
+        f.write(f"Config used: {args.config}\n")
+
+    print(f"\nResults saved to {result_dir}")
 
 
-    # # 绘制频率-LSD图
-    # plt.figure(figsize=(10, 6))
-    # plt.semilogx(freq_list, avg_lsd_per_freq, 'b-o')
-    # plt.semilogx(freq_list, avg_lsd_per_freq_of_mean, 'r-o')
-    # plt.title('Frequency vs LSD')
-    # plt.xlabel('Frequency')
-    # plt.ylabel('LSD (dB)')
-    # plt.grid(True, which="both", ls="--")
-    # plt.legend(['LSD of predicted HRTF', 'LSD of mean HRTF'])
-    # # 保存频率-LSD图片
-    # plt.savefig("LSD_per_frequency.png")  # 保存频率-LSD图片
-
-    # #绘制LSD对比图
-    # plt.figure(figsize=(10, 6))
-    # plt.plot(range(1, len(res_list)+1), res_list, 'b-o', label='LSD of predicted HRTF')
-    # plt.plot(range(1, len(res_list_mean)+1), res_list_mean, 'r-o', label='LSD of mean HRTF')
-    # plt.title('LSD Comparison')
-    # plt.xlabel('HRTF ID')
-    # plt.ylabel('LSD (dB)')
-    # plt.legend()
-    # plt.grid(True, which="both", ls="--")
-    # # 保存LSD对比图
-    # plt.savefig("LSD_comparison.png")  # 保存LSD对比图
-    # plt.show(block=True)  # 显示图像，阻止脚本结束时关闭图像窗口
-
-    # # 保存LSD结果
-    # np.savetxt("LSD_results.txt", res_list, fmt='%.6f')
+if __name__ == "__main__":
+    main()
