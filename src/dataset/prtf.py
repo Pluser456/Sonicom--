@@ -58,6 +58,16 @@ class HRTFDataSet(SonicomDataSet):
             "right_voxel": right_voxel
         }
 
+    def _get_hrtf(self, data, position_idx):
+        if self.mode == "left":
+            hrtf_data = data["F_left"][:, :][position_idx, :]
+            mean_hrtf = self.log_mean_hrtf_left[position_idx, :] if self.use_diff else 0
+            return torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+        elif self.mode == "right":
+            hrtf_data = data["F_right"][:, :][position_idx, :]
+            mean_hrtf = self.log_mean_hrtf_right[position_idx, :] if self.use_diff else 0
+            return torch.tensor(20 * np.log10(hrtf_data) - mean_hrtf).type(torch.float32)
+
     def on_epoch_end(self):
         """在每个epoch开始时调用，为每个文件生成随机不重复的索引序列"""
         if self.status == "train":

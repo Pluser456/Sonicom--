@@ -17,9 +17,7 @@ class CVAE(nn.Module):
     def __init__(self, encoder_layer_sizes, latent_size, decoder_layer_sizes, num_labels=1):
         super().__init__()
         assert num_labels > 0
-        assert type(encoder_layer_sizes) == list
         assert type(latent_size) == int
-        assert type(decoder_layer_sizes) == list
         self.latent_size = latent_size
         self.enc = Encoder(encoder_layer_sizes, latent_size, num_labels)
         self.dec = Decoder(decoder_layer_sizes, latent_size, num_labels)
