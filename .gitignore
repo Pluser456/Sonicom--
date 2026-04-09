@@ -58,3 +58,8 @@ src/models/vector-quantize-pytorch-master
 src/models/quantizer
 
 src/utils/gen_config_batch.py
+src/utils/gen_eval_configs.py
+
+# AI Programming
+CLAUDE.md
+
