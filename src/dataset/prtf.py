@@ -95,15 +95,16 @@ class HRTFDataSet(SonicomDataSet):
 class SingleSubjectDataSet(HRTFDataSet):
     """单个受试者的特征数据集"""
     def __init__(
-            self, 
+            self,
             hrtf_files,
-            left_voxels, 
+            left_voxels,
             right_voxels,
             train_log_mean_hrtf_left,
             train_log_mean_hrtf_right,
             subject_id,
             mode="both",
             inputform="voxel",
+            pos_num_per_batch=7,
     ):
         # 确保subject_id有效
         if not (1 <= subject_id <= len(hrtf_files)):
@@ -126,37 +127,26 @@ class SingleSubjectDataSet(HRTFDataSet):
             provided_mean_left=train_log_mean_hrtf_left,
             provided_mean_right=train_log_mean_hrtf_right,
             inputform=inputform,
+            pos_num_per_batch=pos_num_per_batch,
         )
 
-    def __getitem__(self, position_idx):
-        """
-        获取数据项
-        Args:
-            idx (int): 索引
-        """
-        position_idx = np.arange(self.positions_per_subject)  # 测试集使用所有方位
-        # 读取HRTF数据
+    def __len__(self):
+        """按批次返回，类似 HRTFDataSet"""
+        self.max_batch_num = self.positions_per_subject // self.pos_num_per_batch \
+            + (1 if self.positions_per_subject % self.pos_num_per_batch != 0 else 0)
+        return self.max_batch_num
+
+    def __getitem__(self, idx):
+        """每次返回少量方位的数据，避免推理时 OOM"""
+        start = idx * self.pos_num_per_batch
+        end = min(start + self.pos_num_per_batch, self.positions_per_subject)
+        position_idx = np.arange(start, end)
         with h5py.File(self.hrtf_files[0], 'r') as data:
-            # 获取方位角
-            original_position_rad = torch.deg2rad(torch.tensor(data["theta"][:, position_idx].T).type(torch.float32))
-            position = torch.stack([
-                torch.sin(original_position_rad[:, 0]), # sin(azimuth)
-                torch.cos(original_position_rad[:, 0]), # cos(azimuth)
-                torch.sin(original_position_rad[:, 1])  # sin(elevation)
-            ], dim=1)
-
-
-            # 获取训练集对应的均值
             if self.mode == "left":
-                mean_value = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
                 hrtf = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32)
             elif self.mode == "right":
-                mean_value = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
                 hrtf = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
             else:
-                mean_left = torch.tensor(self.log_mean_hrtf_left[position_idx, :]).type(torch.float32)
-                mean_right = torch.tensor(self.log_mean_hrtf_right[position_idx, :]).type(torch.float32)
-                mean_value = torch.cat([mean_left, mean_right], dim=0)
                 hrtf_left = torch.tensor(data["F_left"][position_idx, :]).type(torch.float32)
                 hrtf_right = torch.tensor(data["F_right"][position_idx, :]).type(torch.float32)
                 hrtf = torch.cat([hrtf_left, hrtf_right], dim=1)
@@ -164,27 +154,24 @@ class SingleSubjectDataSet(HRTFDataSet):
         left_voxel = self._load_data(self.left_voxel_paths[0], is_right=False) if self.left_voxel_paths else None
         right_voxel = self._load_data(self.right_voxel_paths[0], is_right=True) if self.right_voxel_paths else None
 
+        one_hot = F.one_hot(torch.LongTensor(position_idx), num_classes=self.positions_per_subject)
+
         return {
             "hrtf": hrtf,
-            "meanlog": mean_value,
-            "position": position,
+            "one_hot": one_hot,
             "left_voxel": left_voxel,
             "right_voxel": right_voxel,
         }
-    
+
     @staticmethod
     def collate_fn(batch):
-        """自定义批处理函数"""
         hrtfs = torch.stack([item["hrtf"] for item in batch])
-        positions = torch.stack([item["position"] for item in batch])
         left_voxel = torch.stack([item["left_voxel"] for item in batch]) if batch[0]["left_voxel"] is not None else None
         right_voxel = torch.stack([item["right_voxel"] for item in batch]) if batch[0]["right_voxel"] is not None else None
-        meanlog = torch.stack([item["meanlog"] for item in batch])
-        
+        one_hots = torch.stack([item["one_hot"] for item in batch])
         return {
             "hrtf": hrtfs,
-            "position": positions,
             "left_voxel": left_voxel,
             "right_voxel": right_voxel,
-            "meanlog": meanlog
+            "one_hot": one_hots,
         }

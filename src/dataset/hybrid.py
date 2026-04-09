@@ -224,4 +224,59 @@ class CVAEDataSet(SonicomDataSet):
             "hrtf": hrtfs,
             "position": positions,  # shape: [batch, 2]
         }
+
+
+class FullPipelineDataSet(SonicomDataSet):
+    """
+    同时输出 HRTF、position、左耳图像、右耳图像
+    用于 VAE-DNN-CVAE 端到端评估
+    """
+    def __init__(self, hrtf_files, left_voxels, right_voxels,
+                 status="test",
+                 use_diff=False, mode="left",
+                 provided_mean_left=None, provided_mean_right=None):
+        super().__init__(
+            hrtf_files=hrtf_files,
+            left_voxels=left_voxels,
+            right_voxels=right_voxels,
+            status=status,
+            calc_mean=False,
+            use_diff=use_diff,
+            inputform="image",
+            mode=mode,
+            provided_mean_left=provided_mean_left,
+            provided_mean_right=provided_mean_right,
+        )
+
+    def __getitem__(self, idx):
+        file_idx = idx
+        position_idx = np.arange(self.positions_per_subject)
+
+        with h5py.File(self.hrtf_files[file_idx], 'r') as data:
+            hrtf = self._get_hrtf(data, position_idx)
+            # 直接返回原始方位角和俯仰角 (度), [positions, 2]
+            position = torch.tensor(data["theta"][:, position_idx].T, dtype=torch.float32)
+
+        left_image = self._load_data(self.left_voxel_paths[file_idx], is_right=False) if self.left_voxel_paths else None
+        right_image = self._load_data(self.right_voxel_paths[file_idx], is_right=True) if self.right_voxel_paths else None
+
+        return {
+            "hrtf": hrtf,
+            "position": position,
+            "left_voxel": left_image,
+            "right_voxel": right_image,
+        }
+
+    @staticmethod
+    def collate_fn(batch):
+        hrtfs = torch.stack([item["hrtf"] for item in batch])
+        positions = torch.stack([item["position"] for item in batch])
+        left_voxels = torch.stack([item["left_voxel"] for item in batch]) if batch[0]["left_voxel"] is not None else None
+        right_voxels = torch.stack([item["right_voxel"] for item in batch]) if batch[0]["right_voxel"] is not None else None
+        return {
+            "hrtf": hrtfs,
+            "position": positions,
+            "left_voxel": left_voxels,
+            "right_voxel": right_voxels,
+        }
     
