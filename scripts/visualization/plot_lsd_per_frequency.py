@@ -177,7 +177,7 @@ def process_all_models(base_dir, dataset, codebook_sizes=None):
                 freq_data = np.array(freq_values)
 
         if len(lsd_per_fold) > 0:
-            model_name = f'{cnn_type}CNN-VQVAE'
+            model_name = f'{cnn_type}-CNN'
             result[model_name] = {
                 'frequencies': freq_data,
                 'lsd_per_fold': lsd_per_fold
@@ -198,15 +198,15 @@ def plot_lsd_comparison(models_data, dataset, output_dir="results/figure"):
     colors = {
         'PRTFNet': "#1E9E15",           # 绿色
         'VAE-DNN-CVAE': '#0072BD',      # 蓝色
-        '2DCNN': '#D95319',       # 橙色
-        '3DCNN': '#C02222',       # 红色
+        '2D': '#D95319',       # 橙色
+        '3D': '#C02222',       # 红色
     }
 
     linestyles = {
         'PRTFNet': '--',                # 虚线
         'VAE-DNN-CVAE': '--',           # 点划线
-        '2DCNN': '-',             # 实线
-        '3DCNN': '-',             # 实线
+        '2D': '-',             # 实线
+        '3D': '-',             # 实线
     }
 
     plt.figure(figsize=(10, 6))
@@ -221,7 +221,7 @@ def plot_lsd_comparison(models_data, dataset, output_dir="results/figure"):
         stds = np.std(lsd_per_fold, axis=0, ddof=1)
 
         # 获取颜色和线型
-        base_name = model_name.split('-')[0] if 'CNN-VQVAE' in model_name else model_name
+        base_name = model_name.split('-')[0] if 'CNN' in model_name else model_name
         color = colors.get(base_name, 'black')
         linestyle = linestyles.get(model_name, '-')
 
